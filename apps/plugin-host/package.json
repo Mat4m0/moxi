@@ -1,0 +1,11 @@
+{
+  "name": "@moxi/plugin-host",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@moxi/contracts": "workspace:*",
+    "@moxi/sdk": "workspace:*",
+    "@moxi/ui": "workspace:*",
+    "vue": "3.5.43"
+  }
+}

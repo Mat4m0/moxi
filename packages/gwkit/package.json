@@ -1,0 +1,8 @@
+{
+  "name": "@moxi/gwkit",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

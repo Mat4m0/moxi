@@ -1,0 +1,12 @@
+{
+  "name": "@moxi/desktop",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@moxi/contracts": "workspace:*",
+    "@moxi/gwkit": "workspace:*"
+  },
+  "devDependencies": {
+    "electron": "44.5.1"
+  }
+}

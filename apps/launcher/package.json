@@ -1,0 +1,10 @@
+{
+  "name": "@moxi/launcher",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@moxi/contracts": "workspace:*",
+    "@moxi/ui": "workspace:*",
+    "vue": "3.5.43"
+  }
+}

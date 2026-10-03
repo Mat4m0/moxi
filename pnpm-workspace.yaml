@@ -1,0 +1,7 @@
+packages:
+  - apps/*
+  - packages/*
+  - plugins/*
+  - tools/*
+
+minimumReleaseAge: 1440

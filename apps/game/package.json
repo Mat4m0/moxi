@@ -1,0 +1,12 @@
+{
+  "name": "@moxi/game",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@moxi/contracts": "workspace:*",
+    "@moxi/gwkit": "workspace:*",
+    "@moxi/sdk": "workspace:*",
+    "@moxi/ui": "workspace:*",
+    "vue": "3.5.43"
+  }
+}

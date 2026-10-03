@@ -1,0 +1,15 @@
+{
+  "name": "moxi",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "vp check && vp test",
+    "test": "vp test",
+    "fmt": "vp fmt"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vite-plus": "1.0.0"
+  },
+  "packageManager": "pnpm@11.28.2"
+}

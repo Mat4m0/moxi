@@ -1,0 +1,11 @@
+{
+  "name": "@moxi/contracts",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "arktype": "2.2.7"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "@moxi/sdk",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@vue/reactivity": "3.5.43"
+  }
+}
