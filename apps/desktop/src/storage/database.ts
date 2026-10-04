@@ -1,4 +1,13 @@
-import { constants, copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
+import {
+  constants,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
@@ -13,11 +22,13 @@ export function openDatabase({
   backupDir,
   appVersion,
   migrations,
+  onQuarantine,
 }: {
   file: string;
   backupDir: string;
   appVersion: string;
   migrations: readonly Migration[];
+  onQuarantine?: (file: string) => void;
 }): Database {
   let previous = 0;
   for (const migration of migrations) {
@@ -31,9 +42,46 @@ export function openDatabase({
     previous = migration.version;
   }
   if (!/^[\w.-]+$/.test(appVersion)) throw new Error("Invalid app version for backup filename.");
-  const existed = existsSync(file);
+  let existed = existsSync(file);
   mkdirSync(dirname(file), { recursive: true });
-  const db = new DatabaseSync(file);
+  let db: Database | undefined;
+  const checkDir = existed ? mkdtempSync(join(dirname(file), ".integrity-")) : null;
+  try {
+    // SQLite can change sidecars while checking; use copies to keep damaged files intact.
+    const checkFile = checkDir ? join(checkDir, "moxi.sqlite") : file;
+    if (checkDir)
+      for (const suffix of ["", "-wal", "-shm"])
+        if (existsSync(file + suffix)) copyFileSync(file + suffix, checkFile + suffix);
+    db = new DatabaseSync(checkFile);
+    const check = db.prepare("PRAGMA quick_check").all();
+    if (check.length !== 1 || check[0]?.quick_check !== "ok")
+      throw Object.assign(new Error("Database integrity check failed."), { errcode: 11 });
+  } catch (error) {
+    db?.close();
+    if (
+      !(
+        error instanceof Error &&
+        "errcode" in error &&
+        typeof error.errcode === "number" &&
+        [11, 26].includes(error.errcode & 255)
+      )
+    )
+      throw error;
+    let date = new Date();
+    let quarantined = `${file}.corrupt-${date.toISOString().replaceAll(":", "-")}`;
+    while (["", "-wal", "-shm"].some((suffix) => existsSync(quarantined + suffix))) {
+      date = new Date(date.getTime() + 1);
+      quarantined = `${file}.corrupt-${date.toISOString().replaceAll(":", "-")}`;
+    }
+    for (const suffix of ["", "-wal", "-shm"])
+      if (existsSync(file + suffix)) renameSync(file + suffix, quarantined + suffix);
+    onQuarantine?.(quarantined);
+    existed = false;
+  } finally {
+    if (db?.isOpen) db.close();
+    if (checkDir) rmSync(checkDir, { recursive: true, force: true });
+  }
+  db = new DatabaseSync(file);
   try {
     db.exec("PRAGMA journal_mode = WAL");
     const current = db.prepare("PRAGMA user_version").get()?.user_version;

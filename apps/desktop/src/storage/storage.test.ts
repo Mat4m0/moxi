@@ -1,6 +1,6 @@
 import { afterEach, expect, test, vi } from "vite-plus/test";
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
-import { mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -71,6 +71,9 @@ test("a failed second pending migration cannot leave the first migration or vers
       { version: 4, sql: "INSERT INTO missing_table VALUES (1)" },
     ]),
   ).toThrow();
+  expect(
+    readdirSync(join(fixture.file, "..")).filter((name) => name.includes(".corrupt-")),
+  ).toEqual([]);
   const reopened = fixture.open();
   expect(
     reopened
@@ -269,4 +272,49 @@ test("appearance saved through Main settings survives reopening the database", (
     uiPanelOpacity: 80,
     uiFont: "inter",
   });
+});
+
+test("garbage settings are preserved with their sidecars instead of preventing startup", () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-10-04T12:00:00Z"));
+  const fixture = setup();
+  writeFileSync(fixture.file, "damaged settings");
+  writeFileSync(fixture.file + "-wal", "damaged wal");
+  writeFileSync(fixture.file + "-shm", "damaged shm");
+  const paths: string[] = [];
+  const db = openDatabase({ ...fixture, migrations, onQuarantine: (file) => paths.push(file) });
+  databases.push(db);
+  expect(paths).toEqual([fixture.file + ".corrupt-2026-10-04T12-00-00.000Z"]);
+  expect(readFileSync(paths[0]!, "utf8")).toBe("damaged settings");
+  expect(readFileSync(paths[0]! + "-wal", "utf8")).toBe("damaged wal");
+  expect(readFileSync(paths[0]! + "-shm", "utf8")).toBe("damaged shm");
+  expect(createAppearanceSettings(db).get()).toEqual({
+    uiStyle: "classic",
+    uiPanelOpacity: 94,
+    uiFont: "guild-wars",
+  });
+  expect(db.prepare("PRAGMA quick_check").get()?.quick_check).toBe("ok");
+});
+
+test("a non-ok quick_check cannot pass damaged settings into startup", () => {
+  const fixture = setup();
+  const original = fixture.open([
+    ...migrations,
+    { version: 2, sql: "CREATE TABLE checked (value INTEGER CHECK (value > 0))" },
+  ]);
+  original.exec(
+    "PRAGMA ignore_check_constraints = ON; INSERT INTO checked VALUES (-1); PRAGMA ignore_check_constraints = OFF",
+  );
+  expect(original.prepare("PRAGMA quick_check").get()?.quick_check).toBe(
+    "CHECK constraint failed in checked",
+  );
+  original.close();
+  const bytes = readFileSync(fixture.file);
+  const paths: string[] = [];
+  const db = openDatabase({ ...fixture, migrations, onQuarantine: (file) => paths.push(file) });
+  databases.push(db);
+  expect(paths).toHaveLength(1);
+  expect(readFileSync(paths[0]!)).toEqual(bytes);
+  expect(db.prepare("PRAGMA quick_check").get()?.quick_check).toBe("ok");
+  expect(db.prepare("PRAGMA user_version").get()?.user_version).toBe(1);
 });

@@ -1,5 +1,5 @@
-import { app, BrowserWindow, MessageChannelMain, net, protocol, session } from "electron";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { app, dialog, BrowserWindow, MessageChannelMain, net, protocol, session } from "electron";
+import { mkdirSync, mkdtempSync, rmdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -35,7 +35,25 @@ const folders = resolveFolders({
   platformDirs: { appData: app.getPath("appData"), cache },
 });
 app.setName(identity.productName);
-mkdirSync(folders.data, { recursive: true });
+try {
+  mkdirSync(folders.data, { recursive: true });
+  const probe = mkdtempSync(join(folders.data, ".write-probe-"));
+  try {
+    const file = join(probe, "probe");
+    writeFileSync(file, "moxi");
+    unlinkSync(file);
+  } finally {
+    rmdirSync(probe);
+  }
+} catch (error) {
+  console.error(`[moxi] Cannot write data folder ${folders.data}`, error);
+  if (process.env.MOXI_BACKGROUND !== "1")
+    dialog.showErrorBox(
+      "Moxi cannot start",
+      `Moxi cannot write to its data folder:\n${folders.data}\n\nCheck that the folder exists and that you can change it, then open Moxi again.`,
+    );
+  app.exit(1);
+}
 app.setPath("userData", folders.data);
 app.setAppUserModelId(identity.appId);
 app.enableSandbox();
@@ -51,7 +69,11 @@ if (!app.isPackaged && process.env.MOXI_CDP_PORT) {
     throw new Error("Invalid development CDP port");
   app.commandLine.appendSwitch("remote-debugging-address", "127.0.0.1");
   app.commandLine.appendSwitch("remote-debugging-port", String(port));
-  writeFileSync(join(folders.data, "cdp.json"), JSON.stringify({ port }));
+  try {
+    writeFileSync(join(folders.data, "cdp.json"), JSON.stringify({ port }));
+  } catch (error) {
+    console.warn("[moxi] Could not write development CDP file", error);
+  }
 }
 // Tests and agents run the app without a Dock icon, visible windows or focus changes.
 const background = !app.isPackaged && process.env.MOXI_BACKGROUND === "1";
@@ -301,11 +323,16 @@ else {
           });
         }
       });
+      let quarantined: string | null = null;
       const database = openDatabase({
         file: join(folders.data, "moxi.sqlite"),
         backupDir: join(folders.data, "backups"),
         appVersion: app.getVersion(),
         migrations,
+        onQuarantine: (file) => {
+          quarantined = file;
+          console.warn(`[moxi] Damaged settings kept at ${file}`);
+        },
       });
       app.once("will-quit", () => database.close());
       const appearance = createAppearanceSettings(database);
@@ -431,6 +458,14 @@ else {
         pluginHost.webContents.once("did-finish-load", () => done()),
       );
       showLauncher();
+      if (quarantined && process.env.MOXI_BACKGROUND !== "1")
+        void dialog.showMessageBox({
+          type: "warning",
+          buttons: ["OK"],
+          title: "Settings were reset",
+          message: "Moxi's settings file was damaged, so Moxi started with default settings.",
+          detail: `The damaged file was kept at:\n${quarantined}`,
+        });
     })
     .catch((error: unknown) => {
       console.error("[moxi] Startup failed", error);
