@@ -62,6 +62,10 @@ export default defineConfig({
         files: ["packages/ui/**"],
         rules: imports(["vue", "@moxi/sdk"], ["contracts", "gwkit", "sdk"], true),
       },
+      {
+        files: ["packages/ui/**/*.test.ts"],
+        rules: imports(["vite-plus/test"], ["contracts", "gwkit", "sdk"]),
+      },
       { files: ["plugins/**"], rules: imports(["@moxi/sdk"], ["contracts", "gwkit", "ui", "sdk"]) },
       {
         files: ["apps/desktop/**"],

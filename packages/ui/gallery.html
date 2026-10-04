@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>GWonMac UI system — live component gallery</title>
+
+    <link rel="stylesheet" href="./src/qtfrizquad.css" />
+    <link rel="stylesheet" href="./src/tokens.css" />
+    <link rel="stylesheet" href="./src/components.css" />
+
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+      }
+      body {
+        display: grid;
+        grid-template-columns: 268px 1fr;
+        height: 100vh;
+        font:
+          13px/1.5 system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+        color: var(--ui-text);
+        background: var(--ui-well);
+      }
+      .controls {
+        padding: 18px;
+        overflow: auto;
+        background: var(--ui-well);
+        border-right: 1px solid var(--ui-line-soft);
+      }
+      .controls h1 {
+        margin: 0 0 4px;
+        font-size: 15px;
+        color: var(--ui-text-bright);
+      }
+      .controls p.sub {
+        margin: 0 0 18px;
+        font-size: 12px;
+        color: var(--ui-text-faint);
+      }
+      .ctl {
+        margin-bottom: 16px;
+      }
+      .ctl > label {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 12px;
+        color: var(--ui-text-muted);
+      }
+
+      .stage {
+        position: relative;
+        overflow: auto;
+        padding: 26px;
+      }
+      .stage::before {
+        content: "";
+        position: fixed;
+        inset: 0 0 0 268px;
+        z-index: -1;
+        background:
+          radial-gradient(60% 45% at 22% 18%, #e8b877, transparent 70%),
+          radial-gradient(55% 45% at 78% 68%, #7fa356, transparent 70%),
+          radial-gradient(40% 35% at 62% 12%, #cfd8e8, transparent 70%),
+          linear-gradient(170deg, #8a7148 0%, #5b4f38 45%, #2a2620 100%);
+      }
+
+      .stage::after {
+        content: "";
+        position: fixed;
+        inset: 0 0 0 268px;
+        z-index: -1;
+        background-image:
+          repeating-linear-gradient(90deg, #ffffff14 0 2px, transparent 2px 56px),
+          repeating-linear-gradient(0deg, #ffffff14 0 2px, transparent 2px 56px);
+      }
+
+      .band {
+        display: inline-block;
+        margin: 0 0 10px;
+        padding: 3px 9px;
+        border-radius: 999px;
+        background: #0f0d0acc;
+        color: #e6ddcb;
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+      section {
+        margin-bottom: 30px;
+      }
+      .cluster {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: flex-start;
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .demo {
+        width: 340px;
+      }
+      .bar {
+        display: grid;
+        grid-template-columns: repeat(8, 38px);
+        gap: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="controls">
+      <h1>UI system</h1>
+      <p class="sub">
+        The shipped Guild Wars Classic and Modern styles. This standalone gallery links production
+        tokens and components directly; custom projection is covered by the Tools, Trade, and Travel
+        workbenches.
+      </p>
+
+      <label class="ctl ui-field">
+        <span class="ui-field-label">Interface style</span>
+        <select class="ui-select" id="style">
+          <option value="guild-wars">Guild Wars · Default</option>
+          <option value="obsidian">Modern</option>
+        </select>
+      </label>
+
+      <label class="ctl ui-field">
+        <span class="ui-field-label">Typography</span>
+        <select class="ui-select" id="font">
+          <option value="guild-wars">Guild Wars Original</option>
+          <option value="inter">Inter</option>
+          <option value="system">System</option>
+          <option value="avenir">Avenir Next</option>
+          <option value="georgia">Georgia</option>
+          <option value="palatino">Palatino</option>
+        </select>
+      </label>
+
+      <div class="ctl ui-range-field">
+        <span>Panel opacity <output id="v-opacity">94%</output></span>
+        <input type="range" class="ui-range" id="opacity" min="65" max="100" value="94" />
+      </div>
+    </div>
+
+    <main class="stage">
+      <section>
+        <p class="band">Hub frame and task controls</p>
+        <div
+          id="classic-frame-specimen"
+          class="ui-frame ui-panel"
+          style="width: min(780px, 100%); height: 380px; box-sizing: border-box"
+        >
+          <header class="ui-panel-head ui-window-head">
+            <button class="ui-button" data-variant="quiet" aria-label="Back">←</button>
+            <h2 class="ui-panel-title">Hub</h2>
+            <button class="ui-button" data-icon aria-label="Close Hub">×</button>
+          </header>
+          <label class="ui-input-group" style="margin: 8px 0"
+            ><span aria-hidden="true">⌕</span
+            ><input aria-label="Search Hub specimen" placeholder="Search people, places, builds…"
+          /></label>
+          <div class="ui-tabs">
+            <button class="ui-tab" aria-selected="true">Tools</button
+            ><button class="ui-tab">Recent</button>
+          </div>
+          <div class="ui-list ui-scroll" style="flex: 1">
+            <button class="ui-row" aria-selected="true">
+              <span class="ui-row-title">Travel</span
+              ><span class="ui-row-meta">Destinations and friends</span>
+            </button>
+            <button class="ui-row">
+              <span class="ui-row-title">Build Library</span
+              ><span class="ui-row-meta">Skills and teams</span>
+            </button>
+            <label class="ui-check"
+              ><input type="checkbox" checked />Remember recent destinations</label
+            >
+            <p class="ui-field-hint">Choose an item, then use its named action.</p>
+            <p class="ui-field-error" role="status">
+              The action could not finish. Your selection is kept.
+            </p>
+          </div>
+          <footer class="ui-panel-foot">
+            <span class="ui-kbd">↵</span
+            ><button class="ui-button" data-variant="primary">Browse travel</button
+            ><button class="ui-button" data-variant="quiet">Actions</button>
+          </footer>
+        </div>
+      </section>
+
+      <section>
+        <p class="band">Typography roles</p>
+        <div class="ui-frame stack" style="max-width: 620px; padding: 16px">
+          <h1 class="ui-title">Display · Builds &amp; Teams</h1>
+          <h2 class="ui-subtitle">Interface · Team composition</h2>
+          <p style="margin: 0; font-family: var(--ui-font-reading)">
+            Reading · Descriptions, Trade messages, help, and warnings remain comfortable at
+            paragraph length.
+          </p>
+          <code style="font-family: var(--ui-font-data)">Data · OQNEAswD2xkDbh0D</code>
+        </div>
+      </section>
+
+      <section>
+        <p class="band">Primitives — everything else is these three</p>
+        <div class="cluster">
+          <div class="ui-frame" style="width: 200px; padding: 16px">
+            <strong>.ui-frame</strong><br />
+            <span style="color: var(--ui-text-muted)">floats over the world</span>
+          </div>
+          <div class="ui-frame" style="width: 200px; padding: 12px">
+            <div class="ui-well" style="padding: 12px">
+              <strong>.ui-well</strong><br />
+              <span style="color: var(--ui-text-muted)">things sit in it</span>
+            </div>
+          </div>
+          <div class="ui-frame" style="width: 200px; padding: 12px">
+            <div class="ui-raised" style="padding: 12px">
+              <strong>.ui-raised</strong><br />
+              <span style="color: var(--ui-text-muted)">things you press</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <p class="band">Panel, tabs, list</p>
+        <div class="cluster">
+          <div class="ui-frame ui-panel demo" style="height: 340px">
+            <div class="ui-panel-head">
+              <h2 class="ui-panel-title">Team library</h2>
+              <span class="ui-chip">14 builds</span>
+              <button class="ui-button" data-icon aria-label="Close">&#10005;</button>
+            </div>
+            <div class="ui-tabs">
+              <button class="ui-tab" aria-selected="true">Builds</button>
+              <button class="ui-tab" aria-selected="false">Teams</button>
+              <button class="ui-tab" aria-selected="false">Captured</button>
+            </div>
+            <ul class="ui-list ui-scroll" style="flex: 1">
+              <li class="ui-row" aria-selected="true">
+                <span class="ui-row-title">Word of Healing</span>
+                <span class="ui-chip">4 teams</span>
+              </li>
+              <li class="ui-row" data-child>
+                <span class="ui-row-title">Word of Healing (variant)</span>
+                <span class="ui-chip" data-level="warn">1 differs</span>
+              </li>
+              <li class="ui-row">
+                <span class="ui-row-title">Discord Necro</span>
+                <span class="ui-chip">2 variants</span>
+              </li>
+              <li class="ui-row"><span class="ui-row-title">Sabway ST Rit</span></li>
+              <li class="ui-row">
+                <span class="ui-row-title">Mesmerway Dom</span>
+                <span class="ui-chip" data-level="bad">no elite</span>
+              </li>
+            </ul>
+            <div class="ui-panel-foot" style="justify-content: flex-end">
+              <button class="ui-button">Import code</button>
+              <button class="ui-button" data-variant="primary">New build</button>
+            </div>
+          </div>
+
+          <div class="ui-frame demo" style="padding: 14px">
+            <div class="stack">
+              <label class="ui-field">
+                <span class="ui-field-label">Build name</span>
+                <input class="ui-input" value="Word of Healing" />
+                <span class="ui-field-hint">Becomes the name in the game's own template list.</span>
+              </label>
+              <div class="ui-field">
+                <span class="ui-field-label">Behaviour</span>
+                <div class="ui-segment">
+                  <label><input type="radio" name="beh" /><span>Fight</span></label>
+                  <label><input type="radio" name="beh" checked /><span>Guard</span></label>
+                  <label><input type="radio" name="beh" /><span>Avoid</span></label>
+                </div>
+              </div>
+              <label class="ui-check">
+                <input type="checkbox" checked />
+                <span>Pin this hero's skill panel</span>
+              </label>
+              <label class="ui-check">
+                <input type="checkbox" />
+                <span>Favourite</span>
+              </label>
+              <select class="ui-select">
+                <option>Norgu</option>
+                <option>Livia</option>
+                <option>Olias</option>
+              </select>
+              <hr class="ui-divider" />
+              <div class="cluster">
+                <button class="ui-button" data-variant="primary">Apply</button>
+                <button class="ui-button">Fork</button>
+                <button class="ui-button" data-variant="quiet">Compare</button>
+                <button class="ui-button" data-variant="danger">Delete</button>
+                <button class="ui-button" disabled>Merge</button>
+              </div>
+              <div class="cluster" style="align-items: center">
+                <button class="ui-link">Reset to saved</button>
+                <button class="ui-link" data-variant="danger">Clear game data…</button>
+                <span>Press <kbd class="ui-kbd">⌘K</kbd> to search</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <p class="band">Skill bars — eight of these are a build</p>
+        <div class="cluster">
+          <div class="ui-frame" style="padding: 14px">
+            <div class="stack">
+              <div>
+                <div style="margin-bottom: 6px; color: var(--ui-text-muted)">
+                  The bar your client actually saved
+                </div>
+                <div class="bar">
+                  <span class="ui-slot" data-profession="Monk" data-elite>WoH</span>
+                  <span class="ui-slot" data-profession="Monk">PS</span>
+                  <span class="ui-slot" data-profession="Monk">DwG</span>
+                  <span class="ui-slot" data-profession="Monk">GoL</span>
+                  <span class="ui-slot" data-profession="Mesmer">Ins</span>
+                  <span class="ui-slot" data-empty>—</span>
+                  <span class="ui-slot" data-profession="Monk">Sig</span>
+                  <span class="ui-slot" data-profession="Monk">Rez</span>
+                </div>
+              </div>
+              <div>
+                <div style="margin-bottom: 6px; color: var(--ui-text-muted)">
+                  A variant — one slot differs
+                </div>
+                <div class="bar">
+                  <span class="ui-slot" data-profession="Monk" data-elite>WoH</span>
+                  <span class="ui-slot" data-profession="Monk">PS</span>
+                  <span class="ui-slot" data-profession="Monk" data-changed>Cure</span>
+                  <span class="ui-slot" data-profession="Monk">GoL</span>
+                  <span class="ui-slot" data-profession="Mesmer">Ins</span>
+                  <span class="ui-slot" data-empty>—</span>
+                  <span class="ui-slot" data-profession="Monk">Sig</span>
+                  <span class="ui-slot" data-profession="Monk">Rez</span>
+                </div>
+              </div>
+              <div class="cluster">
+                <span class="ui-mark" data-profession="Warrior" style="width: 34px; height: 34px"
+                  >W</span
+                >
+                <span class="ui-mark" data-profession="Ranger" style="width: 34px; height: 34px"
+                  >R</span
+                >
+                <span
+                  class="ui-mark"
+                  data-profession="Necromancer"
+                  style="width: 34px; height: 34px"
+                  >N</span
+                >
+                <span
+                  class="ui-mark"
+                  data-profession="Elementalist"
+                  style="width: 34px; height: 34px"
+                  >E</span
+                >
+                <span class="ui-mark" data-profession="Ritualist" style="width: 34px; height: 34px"
+                  >Rt</span
+                >
+                <span class="ui-mark" data-empty style="width: 34px; height: 34px">—</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="ui-frame demo" style="padding: 14px">
+            <div class="ui-empty">
+              <strong>No builds yet</strong>
+              <p>Paste a template code, or capture the party you are standing in.</p>
+              <button class="ui-button" data-variant="primary">Paste a code</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <p class="band">Settings — the same system, on a surface that already existed</p>
+        <div class="ui-frame" style="display: flex; width: 600px; height: 280px">
+          <nav class="ui-rail" style="width: 152px">
+            <button aria-selected="true">Game Data</button>
+            <button aria-selected="false">Display</button>
+            <button aria-selected="false">Controls</button>
+            <button aria-selected="false">Advanced</button>
+          </nav>
+          <div class="stack" style="flex: 1; padding: 16px">
+            <div class="ui-field">
+              <span class="ui-field-label">Graphics quality</span>
+              <div class="ui-segment">
+                <label><input type="radio" name="rs" /><span>1×</span></label>
+                <label><input type="radio" name="rs" /><span>1.5×</span></label>
+                <label><input type="radio" name="rs" checked /><span>Retina — 2×</span></label>
+              </div>
+              <span class="ui-field-hint"
+                >Higher is sharper on a Retina display, and costs GPU time.</span
+              >
+            </div>
+            <label class="ui-check"
+              ><input type="checkbox" checked /><span>Use the game's own cursor</span></label
+            >
+            <label class="ui-check"
+              ><input type="checkbox" /><span>Show target distance and range</span></label
+            >
+            <div class="ui-progress" style="margin-top: auto">
+              <div class="ui-progress-fill" style="width: 62%"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <p class="band">Chips, banners and toasts</p>
+        <div class="cluster" style="align-items: center; margin-bottom: 12px">
+          <span class="ui-chip">neutral</span>
+          <button class="ui-chip" aria-pressed="true">filter on</button>
+          <button class="ui-chip" aria-pressed="false">filter off</button>
+          <span class="ui-chip" data-level="good">certified</span>
+          <span class="ui-chip" data-level="info">used by 3 teams</span>
+          <span class="ui-chip" data-level="warn">1 skill differs</span>
+          <span class="ui-chip" data-level="bad">no elite</span>
+        </div>
+        <div class="stack" style="max-width: 520px">
+          <div class="ui-banner">
+            <span>This build is used by 3 teams.</span><button class="ui-link">Show them</button>
+          </div>
+          <div class="ui-banner" data-tone="warning">
+            <span>Two heroes have no build assigned.</span><button class="ui-link">Fix</button>
+          </div>
+          <div class="ui-toast">Forked — Discordway and Mesmerway now use the variant.</div>
+          <div class="ui-toast" data-tone="warning">Saved, but the client was running.</div>
+          <div class="ui-toast" data-tone="error">That template code is not valid.</div>
+        </div>
+      </section>
+    </main>
+
+    <script type="module">
+      import { attachClassicFrame } from "./src/frame.ts";
+      const specimen = document.getElementById("classic-frame-specimen");
+      if (specimen) attachClassicFrame(specimen);
+    </script>
+    <script>
+      const root = document.documentElement;
+      const KNOBS = [{ id: "opacity", token: "--ui-panel-opacity", scale: 0.01, unit: "%" }];
+
+      function apply() {
+        const style = document.getElementById("style").value;
+        if (style === "obsidian") root.dataset.uiStyle = style;
+        else delete root.dataset.uiStyle;
+        delete root.dataset.uiMaterial;
+        const font = document.getElementById("font").value;
+        root.dataset.uiFont = font;
+        for (const knob of KNOBS) {
+          const raw = Number(document.getElementById(knob.id).value);
+          const value = knob.unit === "%" ? String(raw * knob.scale) : `${raw}px`;
+          root.style.setProperty(knob.token, value);
+          document.getElementById(`v-${knob.id}`).textContent = `${raw}${knob.unit}`;
+        }
+      }
+      for (const knob of KNOBS) {
+        document.getElementById(knob.id).addEventListener("input", apply);
+      }
+      document.getElementById("style").addEventListener("change", apply);
+      document.getElementById("font").addEventListener("change", apply);
+
+      window.gwSyncGalleryControls = () => {
+        document.getElementById("style").value =
+          root.dataset.uiStyle === "obsidian" ? "obsidian" : "guild-wars";
+        document.getElementById("font").value = root.dataset.uiFont || "guild-wars";
+        for (const knob of KNOBS) {
+          const current = parseFloat(root.style.getPropertyValue(knob.token));
+          if (Number.isNaN(current)) continue;
+          const raw = Math.round(knob.unit === "%" ? current / knob.scale : current);
+          document.getElementById(knob.id).value = String(raw);
+          document.getElementById(`v-${knob.id}`).textContent = `${raw}${knob.unit}`;
+        }
+      };
+
+      for (const container of document.querySelectorAll(".ui-tabs, .ui-rail, .ui-list")) {
+        container.addEventListener("click", (event) => {
+          const item = event.target.closest("[aria-selected]");
+          if (!item || !container.contains(item)) return;
+          for (const other of container.querySelectorAll("[aria-selected]")) {
+            other.setAttribute("aria-selected", String(other === item));
+          }
+        });
+      }
+      for (const chip of document.querySelectorAll("button.ui-chip")) {
+        chip.addEventListener("click", () => {
+          chip.setAttribute("aria-pressed", String(chip.getAttribute("aria-pressed") !== "true"));
+        });
+      }
+
+      apply();
+    </script>
+  </body>
+</html>

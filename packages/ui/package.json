@@ -3,7 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./tokens.css": "./src/tokens.css",
+    "./components.css": "./src/components.css",
+    "./fonts.css": "./src/fonts.css"
   },
   "dependencies": {
     "@moxi/sdk": "workspace:*",

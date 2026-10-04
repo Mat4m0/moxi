@@ -5,7 +5,8 @@
   "scripts": {
     "check": "vp check && vp test",
     "test": "vp test",
-    "fmt": "vp fmt"
+    "fmt": "vp fmt",
+    "ui": "vp dev --config packages/ui/vite.config.ts"
   },
   "devDependencies": {
     "typescript": "5.9.3",
