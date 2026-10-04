@@ -1,20 +1,12 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { describe, expect, test } from "vite-plus/test";
+import { parseManifest } from "@moxi/sdk/host";
 import { createTestHost } from "@moxi/sdk/testing";
-import type { Manifest } from "@moxi/sdk";
 import plugin from "./index.ts";
 import manifest from "./plugin.json";
 
-beforeEach(() => vi.useFakeTimers());
-afterEach(() => vi.useRealTimers());
-
-async function settle<T>(promise: Promise<T>): Promise<T> {
-  await vi.runAllTimersAsync();
-  return promise;
-}
-
 describe("builds", () => {
   test("offers saved builds to Hub search, scoped to 'build'", async () => {
-    const host = await settle(createTestHost(manifest as Manifest, plugin));
+    const host = await createTestHost(manifest, plugin);
     expect(host.state.items.find((i) => i.title === "Smiter")).toMatchObject({
       scope: "build",
       subtitle: "Monk",
@@ -28,8 +20,8 @@ describe("builds", () => {
   });
 
   test("loading a build is one game action, started by the player's choice", async () => {
-    const host = await settle(createTestHost(manifest as Manifest, plugin));
-    await settle(host.choose("items", "b1", "apply"));
+    const host = await createTestHost(manifest, plugin);
+    await host.choose("items", "b1", "apply");
     expect(host.state.actions).toEqual([
       { op: "game.loadBuild", args: { code: "OwcT0YH4R3bAAAAAAAAA" }, activated: true },
     ]);
@@ -37,16 +29,14 @@ describe("builds", () => {
   });
 
   test("a refused load is reported, not claimed as done", async () => {
-    const host = await settle(
-      createTestHost(manifest as Manifest, plugin, {
-        actionResult: {
-          status: "refused",
-          reason: "restricted-area",
-          message: "Builds can only be loaded in an outpost.",
-        },
-      }),
-    );
-    await settle(host.choose("items", "b1", "apply"));
+    const host = await createTestHost(manifest, plugin, {
+      actionResult: {
+        status: "refused",
+        reason: "restricted-area",
+        message: "Builds can only be loaded in an outpost.",
+      },
+    });
+    await host.choose("items", "b1", "apply");
     expect(host.state.toasts).toEqual([
       {
         title: "Smiter was not loaded",
@@ -57,10 +47,10 @@ describe("builds", () => {
   });
 
   test("deleting a build removes it from search and from an open library view", async () => {
-    const host = await settle(createTestHost(manifest as Manifest, plugin));
-    const library = await settle(host.command("library"));
+    const host = await createTestHost(manifest, plugin);
+    const library = await host.command("library");
     if (!library) throw new Error("Expected the library view");
-    await settle(host.choose(library.viewId, "b1", "delete"));
+    await host.choose(library.viewId, "b1", "delete");
     const titles = (v: { title: string }[]) => v.map((i) => i.title);
     expect(titles(host.state.items)).toEqual([
       "Discordway",
@@ -72,4 +62,8 @@ describe("builds", () => {
     if (!view || view.type !== "list") throw new Error("Expected the library list");
     expect(titles(view.items)).toEqual(["Discordway", "Panic Mesmer", "Imbagon", "Smite Ranger"]);
   });
+});
+
+test("accepts the bundled manifest without author casts", () => {
+  expect(parseManifest(manifest)).toEqual(manifest);
 });

@@ -1,16 +1,18 @@
+import { parseManifest } from "./manifest.ts";
 import type { Setup } from "./index.ts";
 import { startRuntime } from "./runtime.ts";
 import type { ActionResult, Observed, Slice } from "./game.ts";
 import type { HudNode } from "./nodes.ts";
-import type { Manifest, ToHost, ToPlugin, WireItem, WireView } from "./protocol.ts";
+import type { ToHost, ToPlugin, WireItem, WireView } from "./protocol.ts";
 
 type GameScript = Partial<Record<Slice, Observed<unknown>>>;
 
 export async function createTestHost(
-  manifest: Manifest,
+  value: unknown,
   setup: Setup,
   opts: { game?: GameScript; actionResult?: ActionResult } = {},
 ) {
+  const manifest = parseManifest(value);
   let toPlugin!: (msg: ToPlugin) => void;
   const game: GameScript = { ...opts.game };
   const subscribed = new Set<Slice>();

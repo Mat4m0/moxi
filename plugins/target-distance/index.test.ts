@@ -1,16 +1,8 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { describe, expect, test } from "vite-plus/test";
+import { parseManifest } from "@moxi/sdk/host";
 import { createTestHost } from "@moxi/sdk/testing";
-import type { Manifest } from "@moxi/sdk";
 import plugin from "./index.ts";
 import manifest from "./plugin.json";
-
-beforeEach(() => vi.useFakeTimers());
-afterEach(() => vi.useRealTimers());
-
-async function settle<T>(promise: Promise<T>): Promise<T> {
-  await vi.runAllTimersAsync();
-  return promise;
-}
 
 const at = 0;
 const player = {
@@ -28,11 +20,9 @@ describe("target distance", () => {
     [1248, "1248", "Cast range"],
     [6000, "6000", "Out of compass"],
   ])("a target at %i units shows %s and %s", async (x, distance, band) => {
-    const host = await settle(
-      createTestHost(manifest as Manifest, plugin, {
-        game: { player, target: target(x) },
-      }),
-    );
+    const host = await createTestHost(manifest, plugin, {
+      game: { player, target: target(x) },
+    });
     expect(host.state.hud.distance).toMatchObject({
       type: "row",
       children: [{ text: distance }, { text: band }],
@@ -40,18 +30,20 @@ describe("target distance", () => {
   });
 
   test("hides when the target is gone, unsupported after an update, or withheld in PvP", async () => {
-    const host = await settle(
-      createTestHost(manifest as Manifest, plugin, {
-        game: { player, target: target(500) },
-      }),
-    );
+    const host = await createTestHost(manifest, plugin, {
+      game: { player, target: target(500) },
+    });
     for (const t of [
       { ok: true, at, value: null },
       { ok: false, reason: "unsupported" },
       { ok: false, reason: "restricted-area" },
     ] as const) {
-      await settle(host.setGame({ target: t }));
+      await host.setGame({ target: t });
       expect(host.state.hud.distance).toBeNull();
     }
   });
+});
+
+test("accepts the bundled manifest without author casts", () => {
+  expect(parseManifest(manifest)).toEqual(manifest);
 });
