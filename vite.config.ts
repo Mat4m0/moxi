@@ -82,14 +82,14 @@ export default defineConfig({
       {
         files: ["apps/game/**"],
         rules: imports(
-          ["vue", "@moxi/contracts", "@moxi/ui", "@moxi/gwkit", "@moxi/sdk"],
+          ["vue", "@moxi/contracts", "@moxi/ui", "@moxi/gwkit", "@moxi/sdk", "@moxi/sdk/host"],
           rendererPackages.filter((name) => name !== "game"),
         ),
       },
       {
         files: ["apps/plugin-host/**"],
         rules: imports(
-          ["vue", "@moxi/contracts", "@moxi/ui", "@moxi/sdk"],
+          ["vue", "@moxi/contracts", "@moxi/ui", "@moxi/sdk", "@moxi/sdk/host"],
           rendererPackages.filter((name) => name !== "plugin-host"),
         ),
       },
