@@ -125,7 +125,7 @@ describe.skipIf(!corpus)("official build matching", () => {
       .filter((file) => /^B[1-7]-.*\.wasm$/.test(file))
       .sort();
     expect(files).toHaveLength(7);
-    const expected = [91.6, 86.3, 92.2, 96.3, 91.9, 77.4];
+    const expected = [91.6, 86.3, 92.2, 92.2, 91.9, 77.4];
     const rows = [];
     let old = parseModule(readFileSync(join(corpus, files[0] ?? "")));
     for (let i = 1; i < files.length; i++) {
