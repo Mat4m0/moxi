@@ -1,0 +1,11 @@
+{
+  "name": "@moxi/plugin-target-distance",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "@moxi/sdk": "workspace:*"
+  }
+}

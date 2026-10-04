@@ -1,0 +1,14 @@
+{
+  "id": "moxi.target-distance",
+  "name": "Target Distance",
+  "version": "1.0.0",
+  "api": 1,
+  "description": "Shows how far your target is, with the Guild Wars range name.",
+  "icon": { "glyph": "target" },
+  "permissions": ["game.player", "game.target"],
+  "activation": ["game"],
+  "commands": [],
+  "settings": [
+    { "key": "showRangeName", "label": "Show range name", "type": "toggle", "default": true }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "id": "moxi.builds",
+  "name": "Builds",
+  "version": "1.0.0",
+  "api": 1,
+  "description": "Save skill builds, find them from Hub, and load them on your character.",
+  "icon": { "glyph": "book" },
+  "permissions": ["game.builds.load"],
+  "activation": ["hub"],
+  "scopes": ["build"],
+  "commands": [
+    {
+      "id": "library",
+      "title": "Build Library",
+      "subtitle": "Browse and apply saved builds",
+      "keywords": ["templates", "skills"],
+      "icon": { "glyph": "book" }
+    },
+    {
+      "id": "new",
+      "title": "New Build",
+      "subtitle": "Save a template code",
+      "keywords": ["add", "create"],
+      "icon": { "glyph": "plus" }
+    }
+  ]
+}

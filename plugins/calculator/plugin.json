@@ -1,0 +1,11 @@
+{
+  "id": "moxi.calculator",
+  "name": "Currency",
+  "version": "1.0.0",
+  "api": 1,
+  "description": "Converts gold, platinum and Globs of Ectoplasm right in Hub search.",
+  "icon": { "glyph": "coins" },
+  "permissions": [],
+  "activation": ["hub"],
+  "commands": []
+}

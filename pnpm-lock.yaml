@@ -103,6 +103,24 @@ importers:
         specifier: 3.5.43
         version: 3.5.43(typescript@5.9.3)
 
+  plugins/builds:
+    dependencies:
+      '@moxi/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+
+  plugins/calculator:
+    dependencies:
+      '@moxi/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+
+  plugins/target-distance:
+    dependencies:
+      '@moxi/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+
 packages:
 
   '@ark/schema@0.56.6':
