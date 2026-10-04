@@ -47,6 +47,10 @@ export default defineConfig({
     overrides: [
       { files: ["packages/gwkit/**"], rules: imports([], ["contracts", "sdk", "ui"]) },
       {
+        files: ["packages/gwkit/**/*.test.ts"],
+        rules: imports(["vite-plus/test", "wabt", "node:*"], ["contracts", "sdk", "ui"]),
+      },
+      {
         files: ["packages/sdk/**"],
         rules: imports(["@vue/reactivity"], ["contracts", "gwkit", "ui"]),
       },

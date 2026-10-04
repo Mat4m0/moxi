@@ -79,7 +79,11 @@ importers:
         specifier: 2.2.7
         version: 2.2.7
 
-  packages/gwkit: {}
+  packages/gwkit:
+    devDependencies:
+      wabt:
+        specifier: ^1.0.39
+        version: 1.0.39
 
   packages/sdk:
     dependencies:
@@ -1182,6 +1186,10 @@ packages:
       typescript:
         optional: true
 
+  wabt@1.0.39:
+    resolution: {integrity: sha512-ba+dRL/75VQQY7RkU/CgriGbkoWAfS8TDyUlJfJhJ8KhtXgMl5dhNvoPNUcQ9IWRhW8u41glMSuZeTvsYq2rRg==}
+    hasBin: true
+
   why-is-node-running@2.3.0:
     resolution: {integrity: sha512-hUrmaWBdVDcxvYqnyh09zunKzROWjbZTiNy8dBEjkS7ehEDQibXJ7XvlmtbwuTclUiIyN+CyXQD4Vmko8fNm8w==}
     engines: {node: '>=8'}
@@ -2027,6 +2035,8 @@ snapshots:
       '@vue/shared': 3.5.43
     optionalDependencies:
       typescript: 5.9.3
+
+  wabt@1.0.39: {}
 
   why-is-node-running@2.3.0:
     dependencies:
