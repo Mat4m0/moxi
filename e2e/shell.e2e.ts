@@ -6,6 +6,7 @@ import { resolve, join } from "node:path";
 import { createRequire } from "node:module";
 import { createServer } from "node:net";
 import { expect, test } from "@playwright/test";
+import { seedOfflineClient } from "./client-cache.ts";
 
 const root = resolve(import.meta.dirname, "..");
 const appPath = resolve(root, "apps/desktop");
@@ -36,16 +37,13 @@ async function processes() {
     });
 }
 
-test("an offline fresh install refuses Play, keeps one launcher, and quits without orphan processes", async ({
-  playwright,
-}, testInfo) => {
-  const data = await mkdtemp(join(tmpdir(), "moxi-e2e-"));
+async function environment(data: string) {
   const env: Record<string, string> = {};
   for (const [name, value] of Object.entries(process.env)) {
     if (value !== undefined) env[name] = value;
   }
   env.MOXI_DATA_DIR = data;
-  // A closed local patch endpoint keeps ArenaNet out of this fresh-install journey.
+  // A closed local patch endpoint keeps ArenaNet out of both journeys.
   env.MOXI_GAME_CACHE = join(data, "game");
   env.MOXI_PATCH_ROOT = "http://127.0.0.1:4699";
   delete env.ELECTRON_RUN_AS_NODE;
@@ -68,6 +66,18 @@ test("an offline fresh install refuses Play, keeps one launcher, and quits witho
     await rm(data, { recursive: true, force: true });
     throw new Error("No free CDP port in 4620–4629");
   }
+  return env;
+}
+
+test("shell keeps one launcher, rejects launcher actions from the game, and quits without orphan processes", async ({
+  playwright,
+}, testInfo) => {
+  const data = await mkdtemp(join(tmpdir(), "moxi-e2e-"));
+  const env = await environment(data);
+  await seedOfflineClient(env.MOXI_GAME_CACHE!).catch(async (error: unknown) => {
+    await rm(data, { recursive: true, force: true });
+    throw error;
+  });
   const application = await playwright._electron
     .launch({
       executablePath: executable,
@@ -120,46 +130,72 @@ test("an offline fresh install refuses Play, keeps one launcher, and quits witho
     await test.step("appearance saves Modern before opening the game", async () => {
       await launcher.getByRole("button", { name: "Settings", exact: true }).click();
       await launcher.getByRole("button", { name: "Appearance", exact: true }).click();
-      await launcher.screenshot({ path: resolve(root, ".evidence/l2/launcher-before.png") });
+      await launcher.screenshot({ path: resolve(root, ".evidence/g1/launcher-before.png") });
       await launcher.getByRole("combobox", { name: /^Panel style/ }).selectOption("obsidian");
       await expect(launcher.getByRole("combobox", { name: /^Panel style/ })).toHaveValue(
         "obsidian",
       );
-      await launcher.screenshot({ path: resolve(root, ".evidence/l2/launcher-after.png") });
+      await launcher.screenshot({ path: resolve(root, ".evidence/g1/launcher-after.png") });
     });
-    await test.step("an offline fresh install shows repair and rejects game.open", async () => {
+    await test.step("Play opens the game through the drive command", async () => {
+      await expect(launcher.getByRole("button", { name: "Play", exact: true })).toBeEnabled();
+      await drive(["click", "launcher", "Play"]);
+      await expect
+        .poll(() => application.windows().some((page) => page.url() === "moxi://app/game/"))
+        .toBe(true);
+    });
+    const game = application.windows().find((page) => page.url() === "moxi://app/game/");
+    if (!game) throw new Error("Game did not open");
+    await test.step("Hub works above the unavailable client and closes with Escape", async () => {
+      await expect(game.getByRole("status")).toHaveText(
+        "The game client could not start. Run fetch-client and restart Moxi.",
+      );
+      await game.screenshot({ path: resolve(root, ".evidence/g1/game-before.png") });
+      await game.keyboard.press(process.platform === "darwin" ? "Meta+r" : "Control+r");
+      await expect(game.getByRole("dialog", { name: "Hub", exact: true })).toBeVisible();
+      await expect(game.locator("html")).toHaveAttribute("data-ui-style", "obsidian");
+      await game.screenshot({ path: resolve(root, ".evidence/g1/hub-modern.png") });
+      await launcher.getByRole("combobox", { name: /^Panel style/ }).selectOption("classic");
+      await expect(game.locator("html")).toHaveAttribute("data-ui-style", "classic");
+      await launcher.getByRole("combobox", { name: /^Panel style/ }).selectOption("custom");
+      await launcher.getByRole("combobox", { name: /^Panel finish/ }).selectOption("modern");
+      await expect(game.locator("html")).toHaveAttribute("data-ui-style", "obsidian");
+      await expect(launcher.locator("html")).toHaveAttribute("data-ui-style", "obsidian");
+      await launcher.getByRole("combobox", { name: /^Panel style/ }).selectOption("obsidian");
+      await expect(game.locator("html")).toHaveAttribute("data-ui-style", "obsidian");
+      await game.getByRole("textbox").fill("10 ecto in p");
       await expect(
-        launcher.getByRole("button", { name: "Open Game Files", exact: true }),
-      ).toBeEnabled();
-      await expect(launcher.getByRole("button", { name: "Play", exact: true })).toHaveCount(0);
+        game.getByText("10 Globs of Ectoplasm = 82 platinum", { exact: true }),
+      ).toBeVisible();
+      await game.screenshot({ path: resolve(root, ".evidence/g1/hub-open.png") });
+      await game.keyboard.press("Escape");
+      await expect(game.getByRole("textbox")).toHaveValue("");
+      await game.keyboard.press("Escape");
+      await expect(game.getByRole("dialog", { name: "Hub", exact: true })).toHaveCount(0);
+    });
+    await test.step("the game cannot invoke game.open", async () => {
+      await expect(game.getByLabel("Guild Wars")).toBeVisible();
       expect(
-        await launcher.evaluate(async () => {
+        await game.evaluate(async () => {
+          const bridge: unknown = Reflect.get(window, "moxi");
+          if (
+            typeof bridge !== "object" ||
+            bridge === null ||
+            !("invoke" in bridge) ||
+            typeof bridge.invoke !== "function"
+          )
+            throw new Error("Game bridge is missing");
           try {
-            const bridge: unknown = Reflect.get(window, "moxi");
-            if (
-              typeof bridge !== "object" ||
-              bridge === null ||
-              !("invoke" in bridge) ||
-              typeof bridge.invoke !== "function"
-            )
-              throw new Error("Launcher bridge is missing");
             await bridge.invoke("game.open", undefined);
             return "allowed";
           } catch (error) {
             return error instanceof Error ? error.message : String(error);
           }
         }),
-      ).toContain("This app action was rejected.");
-      await launcher.getByRole("button", { name: "Open Game Files", exact: true }).click();
-      await expect(launcher.getByText("Repair needed", { exact: true })).toBeVisible();
-      await launcher.screenshot({ path: resolve(root, ".evidence/g1/offline-repair.png") });
-      await launcher.getByRole("button", { name: "Repair game files", exact: true }).click();
-      await expect(
-        launcher.getByRole("main").getByText("Downloading the playable client", { exact: true }),
-      ).toBeVisible();
-      await expect(launcher.getByRole("button", { name: "Play", exact: true })).toBeDisabled();
-      await expect(launcher.getByText("Repair needed", { exact: true })).toBeVisible();
-      expect(application.windows().some((page) => page.url() === "moxi://app/game/")).toBe(false);
+      ).toBe("This window cannot use that action.");
+      await drive(["key", "game", "Escape"]);
+      await drive(["screenshot", "game", testInfo.outputPath("game.png")]);
+      expect((await drive(["windows"])).stdout).toContain("game\tMoxi");
     });
     await test.step("a second launch focuses the first launcher and exits", async () => {
       await application.evaluate(({ BrowserWindow }) => {
@@ -217,7 +253,7 @@ test("an offline fresh install refuses Play, keeps one launcher, and quits witho
         await page.getByRole("button", { name: "Settings", exact: true }).click();
         await page.getByRole("button", { name: "Appearance", exact: true }).click();
         await expect(page.getByRole("combobox", { name: /^Panel style/ })).toHaveValue("obsidian");
-        await page.screenshot({ path: resolve(root, ".evidence/l2/launcher-reopened.png") });
+        await page.screenshot({ path: resolve(root, ".evidence/g1/launcher-reopened.png") });
       } finally {
         await relaunched.close();
       }
@@ -235,6 +271,61 @@ test("an offline fresh install refuses Play, keeps one launcher, and quits witho
         expect(error).toHaveProperty("code", "ESRCH");
       }
     }
+    await rm(data, { recursive: true, force: true });
+  }
+});
+
+test("an offline fresh install refuses Play and offers repair", async ({ playwright }) => {
+  const data = await mkdtemp(join(tmpdir(), "moxi-e2e-"));
+  const env = await environment(data);
+  const application = await playwright._electron
+    .launch({ executablePath: executable, args: [appPath], env })
+    .catch(async (error: unknown) => {
+      await rm(data, { recursive: true, force: true });
+      throw error;
+    });
+  try {
+    await expect
+      .poll(() => application.windows().some((page) => page.url() === "moxi://app/launcher/"))
+      .toBe(true);
+    const launcher = application.windows().find((page) => page.url() === "moxi://app/launcher/");
+    if (!launcher) throw new Error("Launcher did not open");
+    await test.step("an offline fresh install shows repair and rejects game.open", async () => {
+      await expect(
+        launcher.getByRole("button", { name: "Open Game Files", exact: true }),
+      ).toBeEnabled();
+      await expect(launcher.getByRole("button", { name: "Play", exact: true })).toHaveCount(0);
+      expect(
+        await launcher.evaluate(async () => {
+          try {
+            const bridge: unknown = Reflect.get(window, "moxi");
+            if (
+              typeof bridge !== "object" ||
+              bridge === null ||
+              !("invoke" in bridge) ||
+              typeof bridge.invoke !== "function"
+            )
+              throw new Error("Launcher bridge is missing");
+            await bridge.invoke("game.open", undefined);
+            return "allowed";
+          } catch (error) {
+            return error instanceof Error ? error.message : String(error);
+          }
+        }),
+      ).toContain("This app action was rejected.");
+      await launcher.getByRole("button", { name: "Open Game Files", exact: true }).click();
+      await expect(launcher.getByText("Repair needed", { exact: true })).toBeVisible();
+      await launcher.screenshot({ path: resolve(root, ".evidence/g1/offline-repair.png") });
+      await launcher.getByRole("button", { name: "Repair game files", exact: true }).click();
+      await expect(
+        launcher.getByRole("main").getByText("Downloading the playable client", { exact: true }),
+      ).toBeVisible();
+      await expect(launcher.getByRole("button", { name: "Play", exact: true })).toBeDisabled();
+      await expect(launcher.getByText("Repair needed", { exact: true })).toBeVisible();
+      expect(application.windows().some((page) => page.url() === "moxi://app/game/")).toBe(false);
+    });
+  } finally {
+    await application.close();
     await rm(data, { recursive: true, force: true });
   }
 });
