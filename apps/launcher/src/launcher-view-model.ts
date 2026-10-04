@@ -44,7 +44,10 @@ export function formatProgress(download: Download): string {
     download.total > 0
       ? `${formatBytes(download.received)} of ${formatBytes(download.total)}`
       : formatBytes(download.received);
-  const speed = download.bytesPerSecond > 0 ? ` · ${formatBytes(download.bytesPerSecond)}/s` : "";
+  const speed =
+    download.bytesPerSecond !== null && download.bytesPerSecond > 0
+      ? ` · ${formatBytes(download.bytesPerSecond)}/s`
+      : "";
   const seconds = download.secondsRemaining;
   let remaining = "";
   if (seconds !== null) {

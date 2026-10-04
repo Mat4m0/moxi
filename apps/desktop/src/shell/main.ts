@@ -10,6 +10,8 @@ import { hubPortMessage } from "@moxi/contracts/windows";
 import type { WindowKind } from "@moxi/contracts";
 import { handle } from "./ipc.js";
 import { createGameNetwork } from "../game-network/index.js";
+import { createClientCache } from "../game-files/client.ts";
+import { createClientReadiness } from "../client-readiness.ts";
 import { createClientRoutes } from "./client.js";
 
 import { openDatabase, migrations } from "../storage/index.js";
@@ -61,7 +63,40 @@ let launcher: BrowserWindow | undefined;
 let game: BrowserWindow | undefined;
 let pluginHost: BrowserWindow;
 let pluginHostReady: Promise<void>;
-let client = createClientRoutes(folders.gameCache);
+const patchRoot = !app.isPackaged ? process.env.MOXI_PATCH_ROOT : undefined;
+const patchFetch: typeof fetch = patchRoot
+  ? (url, init) => {
+      const original = new URL(
+        typeof url === "string" ? url : url instanceof URL ? url.href : url.url,
+      );
+      const root = new URL(patchRoot);
+      if (
+        root.protocol !== "http:" ||
+        root.hostname !== "127.0.0.1" ||
+        Number(root.port) < 4600 ||
+        Number(root.port) > 4699
+      )
+        throw new Error("Invalid development patch root.");
+      return fetch(new URL(original.pathname, root), init);
+    }
+  : fetch;
+const cacheClient = createClientCache(folders.gameCache, patchFetch);
+const readiness = createClientReadiness({
+  prepare: cacheClient.prepare,
+  state: cacheClient.state,
+  now: Date.now,
+  log: (error) =>
+    console.warn(
+      "[moxi] Client preparation failed",
+      error instanceof Error && "code" in error ? error.code : "client_prepare",
+    ),
+  changed: (value) => {
+    for (const { kind, window } of windows.values())
+      if (kind === "launcher" && !window.isDestroyed())
+        window.webContents.send("client.readiness.changed", value);
+  },
+});
+let client = createClientRoutes(folders.gameCache, patchFetch);
 const csp =
   "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; worker-src 'self' blob:; connect-src 'self'";
 // electron-builder.config.ts copies each renderer's dist to renderers/<name>.
@@ -73,7 +108,7 @@ const roots = {
   "plugin-host": rendererRoot("plugin-host"),
 };
 function createWindow(kind: WindowKind) {
-  if (kind === "game") client = createClientRoutes(folders.gameCache);
+  if (kind === "game") client = createClientRoutes(folders.gameCache, patchFetch);
   const win = new BrowserWindow({
     width: 960,
     height: 640,
@@ -270,9 +305,20 @@ else {
         }),
         windowKind,
       );
+      handle("client.readiness", () => readiness.current(), windowKind);
+      handle(
+        "client.retry",
+        () => {
+          void readiness.retry();
+          return undefined;
+        },
+        windowKind,
+      );
+      void readiness.retry();
       handle(
         "game.open",
         () => {
+          readiness.assertPlayable();
           if (!game || game.isDestroyed()) game = createWindow("game");
           game.show();
           game.focus();

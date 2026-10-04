@@ -65,7 +65,7 @@ async function settings(section: SettingsRoute) {
   }
 }
 async function play(id?: string) {
-  if (busy.value) return;
+  if (busy.value || state.value.readiness.state === "preparing") return;
   if (state.value.readiness.state === "repair-required") {
     await settings("game-files");
     return;

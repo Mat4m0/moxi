@@ -38,6 +38,7 @@ const label = computed(() => launchLabel(selected.value, state.value.readiness))
 const disabled = computed(
   () =>
     props.busy ||
+    state.value.readiness.state === "preparing" ||
     !selected.value.length ||
     selected.value.some((profile) => ["opening", "checking"].includes(profile.state)) ||
     (state.value.readiness.state !== "repair-required" &&
@@ -69,14 +70,14 @@ const status = computed(() => {
     };
   if (readiness.state === "preparing")
     return {
-      title: `Preparing Guild Wars · ${Math.min(100, Math.round((readiness.progress.received / readiness.progress.total) * 100))}%`,
+      title: `Preparing Guild Wars · ${Math.min(100, Math.round((readiness.progress.received / Math.max(1, readiness.progress.total)) * 100))}%`,
       detail: "Downloading the playable client",
       tone: "working",
       icon: Clock3,
       action: "View download",
       progress: Math.min(
         100,
-        Math.round((readiness.progress.received / readiness.progress.total) * 100),
+        Math.round((readiness.progress.received / Math.max(1, readiness.progress.total)) * 100),
       ),
     };
   if (state.value.appUpdate.phase === "ready" && !updateDismissed.value)

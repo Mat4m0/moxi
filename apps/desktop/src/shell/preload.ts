@@ -1,8 +1,17 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 import { hubPortMessage, windowChannels, type WindowKind } from "@moxi/contracts/windows";
-import type { ChannelName, SocketEvent, AppearanceSettings } from "@moxi/contracts";
+import type { ChannelName, SocketEvent, AppearanceSettings, Readiness } from "@moxi/contracts";
 export function exposeBridge(kind: WindowKind) {
   contextBridge.exposeInMainWorld("moxi", {
+    ...(kind === "launcher"
+      ? {
+          onReadinessChanged(listener: (readiness: Readiness) => void) {
+            const receive = (_event: IpcRendererEvent, readiness: Readiness) => listener(readiness);
+            ipcRenderer.on("client.readiness.changed", receive);
+            return () => ipcRenderer.removeListener("client.readiness.changed", receive);
+          },
+        }
+      : {}),
     ...(kind === "game"
       ? {
           onAppearanceChanged(listener: (settings: AppearanceSettings) => void) {

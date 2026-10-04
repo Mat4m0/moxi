@@ -411,3 +411,25 @@ test.each([
   }));
   expect(launchLabel(profiles, data.state.value.readiness)).toBe(expected);
 });
+
+test("does not let Play launch while client artifacts are preparing", async () => {
+  const data = fixtureData("?fixture=preparing");
+  data.state.value = {
+    ...data.state.value,
+    readiness: {
+      state: "preparing",
+      progress: {
+        status: "running",
+        received: 0,
+        total: 0,
+        bytesPerSecond: null,
+        secondsRemaining: null,
+      },
+    },
+  };
+  await mount(data);
+  expect(document.body.textContent).toContain("Preparing Guild Wars · 0%");
+  expect(button("Play").disabled).toBe(true);
+  await click("Choose accounts, Main account");
+  expect(button("Play Main account").disabled).toBe(true);
+});

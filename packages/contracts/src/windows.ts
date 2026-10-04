@@ -1,5 +1,12 @@
 export const windowChannels = {
-  launcher: ["appearance.get", "appearance.set", "app.info", "game.open"],
+  launcher: [
+    "client.readiness",
+    "client.retry",
+    "appearance.get",
+    "appearance.set",
+    "app.info",
+    "game.open",
+  ],
   game: [
     "appearance.get",
     "app.info",

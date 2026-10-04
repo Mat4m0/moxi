@@ -152,10 +152,15 @@ export function createClientCache(dir: string, fetchResponse: typeof fetch = fet
       stageCandidate({ active: null, candidate: null, previous: null }, generationToken);
       return join(generationsDir, generationToken);
     },
-    prepare: () =>
+    prepare: (progress?: (received: number, total: number) => void) =>
       locked(async () => {
         const manifestBytes = await request(`${PATCH_ROOT}/manifest.json`, 16 * 1024 * 1024);
         const manifest = parseManifest(manifestBytes);
+        const total = [...manifest.files.values()]
+          .filter((file) => artifacts.some((name) => name === file.name))
+          .reduce((sum, file) => sum + file.size, 0);
+        let received = 0;
+        progress?.(0, total);
         const store = createChunkStore({
           dir: join(dir, "chunks"),
           compression: manifest.compression,
@@ -172,7 +177,11 @@ export function createClientCache(dir: string, fetchResponse: typeof fetch = fet
         if (existing) {
           try {
             const stored = await readFile(join(generationsDir, existing, "manifest.json"));
-            if (stored.equals(manifestBytes)) return await verifyGeneration(existing, manifest);
+            if (stored.equals(manifestBytes)) {
+              const result = await verifyGeneration(existing, manifest);
+              progress?.(total, total);
+              return result;
+            }
           } catch (error) {
             if (
               !(error instanceof GameFileError) &&
@@ -210,7 +219,9 @@ export function createClientCache(dir: string, fetchResponse: typeof fetch = fet
                   if (result.status === "rejected") throw result.reason;
                   await file.writeFile(result.value);
                   digest.update(result.value);
+                  received += result.value.byteLength;
                 }
+                progress?.(received, total);
               }
               await file.sync();
             } finally {

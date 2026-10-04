@@ -41,7 +41,25 @@ export const appearanceSettings = type({
   "uiCustomTheme?": appearanceFields.uiCustomTheme,
 });
 export type AppearanceSettings = typeof appearanceSettings.infer;
+export const download = type({
+  status: "'running' | 'paused' | 'complete'",
+  received: "number.safe >= 0",
+  total: "number.safe >= 0",
+  bytesPerSecond: "number >= 0 | null",
+  secondsRemaining: "number >= 0 | null",
+});
+export const clientReadiness = type({
+  state: "'playable'",
+  backgroundDownload: download.or("null"),
+})
+  .or({ state: "'offline-playable'" })
+  .or({ state: "'repair-required'" })
+  .or({ state: "'preparing'", progress: download });
+export type Readiness = typeof clientReadiness.infer;
+export type Download = typeof download.infer;
 export const channels = {
+  "client.readiness": defineChannel({ request: type("undefined"), response: clientReadiness }),
+  "client.retry": defineChannel({ request: type("undefined"), response: type("undefined") }),
   "appearance.get": defineChannel({ request: type("undefined"), response: appearanceSettings }),
   "appearance.set": defineChannel({ request: appearanceSettings, response: type("undefined") }),
   "game.net.connect": defineChannel({
@@ -88,7 +106,9 @@ export type Bridge<K extends WindowKind> = {
       onSocketEvent(listener: (event: SocketEvent) => void): () => void;
       onAppearanceChanged(listener: (settings: AppearanceSettings) => void): () => void;
     }
-  : {});
+  : K extends "launcher"
+    ? { onReadinessChanged(listener: (readiness: Readiness) => void): () => void }
+    : {});
 export function validateRequest(name: ChannelName, kind: WindowKind | undefined, input: unknown) {
   if (!kind || !windowChannels[kind].some((allowed) => allowed === name))
     throw new Error("This window cannot use that action.");

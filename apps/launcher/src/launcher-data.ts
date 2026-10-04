@@ -1,3 +1,4 @@
+import type { Readiness } from "@moxi/contracts";
 import { shallowRef, type ShallowRef } from "vue";
 import type { AppearanceSettings, CustomUiTheme } from "@moxi/ui";
 import { defaultCustomUiTheme } from "@moxi/ui";
@@ -21,18 +22,7 @@ export interface Profile {
   failure?: "profile-preparation" | "window-startup" | "client-validation" | "renderer-crash";
   appearance: { icon: ProfileIcon; color: string };
 }
-export interface Download {
-  status: "running" | "paused" | "complete";
-  received: number;
-  total: number;
-  bytesPerSecond: number;
-  secondsRemaining: number | null;
-}
-export type Readiness =
-  | { state: "playable"; backgroundDownload: Download | null }
-  | { state: "offline-playable" }
-  | { state: "repair-required" }
-  | { state: "preparing"; progress: Download };
+export type { Download, Readiness } from "@moxi/contracts";
 export interface NewsStory {
   id: string;
   source: "game" | "event" | "launcher";
@@ -364,6 +354,13 @@ export function bridgeData(): LauncherData {
   return {
     ...data,
     async initialize() {
+      let changed = false;
+      window.moxi.onReadinessChanged((readiness) => {
+        changed = true;
+        data.state.value = { ...data.state.value, readiness };
+      });
+      const readiness = await window.moxi.invoke("client.readiness", undefined);
+      if (!changed) data.state.value = { ...data.state.value, readiness };
       const info = await window.moxi.invoke("app.info", undefined);
       const appearance = await window.moxi.invoke("appearance.get", undefined);
       data.state.value = {
@@ -384,6 +381,10 @@ export function bridgeData(): LauncherData {
         uiCustomTheme,
       });
       data.state.value = { ...data.state.value, settings };
+    },
+    download(action) {
+      if (action === "repair" || action === "reset")
+        void window.moxi.invoke("client.retry", undefined);
     },
     async play() {
       await window.moxi.invoke("game.open", undefined);

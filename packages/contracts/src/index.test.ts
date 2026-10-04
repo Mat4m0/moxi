@@ -1,6 +1,10 @@
 import { expect, test } from "vite-plus/test";
 import { validateRequest, type WindowKind, type ChannelName } from "./index.js";
 const denied: [ChannelName, WindowKind | undefined, unknown][] = [
+  ["client.readiness", "game", undefined],
+  ["client.readiness", "pluginHost", undefined],
+  ["client.retry", "game", undefined],
+  ["client.retry", "pluginHost", undefined],
   ["game.net.connect", "launcher", { id: 1, destination: "8.8.8.8:6112" }],
   ["game.net.write", "pluginHost", { id: 1, bytes: new Uint8Array([1]) }],
   ["game.net.close", "launcher", { id: 1 }],

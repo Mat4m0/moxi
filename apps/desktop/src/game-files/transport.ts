@@ -5,6 +5,10 @@ const headers = {
   "Accept-Encoding": "identity",
 };
 
+export class PatchNetworkError extends Error {
+  readonly code = "patch_network";
+}
+
 class RefusedResponse extends Error {}
 
 let active = 0;
@@ -69,7 +73,12 @@ export function createPatchTransport(fetchResponse: typeof fetch = fetch) {
           }
           return Buffer.concat(chunks, size);
         } catch (error) {
-          if (error instanceof RefusedResponse || attempt === 3) throw error;
+          if (error instanceof RefusedResponse) throw error;
+          if (attempt === 3)
+            throw new PatchNetworkError(
+              error instanceof Error ? error.message : "Patch service is unavailable.",
+              { cause: error },
+            );
         } finally {
           clearTimeout(timer);
           controller.abort();

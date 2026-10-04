@@ -36,7 +36,7 @@ async function processes() {
     });
 }
 
-test("shell keeps one launcher, rejects launcher actions from the game, and quits without orphan processes", async ({
+test("an offline fresh install refuses Play, keeps one launcher, and quits without orphan processes", async ({
   playwright,
 }, testInfo) => {
   const data = await mkdtemp(join(tmpdir(), "moxi-e2e-"));
@@ -45,8 +45,9 @@ test("shell keeps one launcher, rejects launcher actions from the game, and quit
     if (value !== undefined) env[name] = value;
   }
   env.MOXI_DATA_DIR = data;
-  // An empty cache keeps ArenaNet's client out of the test; the game window shows its fallback.
+  // A closed local patch endpoint keeps ArenaNet out of this fresh-install journey.
   env.MOXI_GAME_CACHE = join(data, "game");
+  env.MOXI_PATCH_ROOT = "http://127.0.0.1:4699";
   delete env.ELECTRON_RUN_AS_NODE;
   delete env.MOXI_LAUNCHER_URL;
   delete env.MOXI_GAME_URL;
@@ -126,64 +127,39 @@ test("shell keeps one launcher, rejects launcher actions from the game, and quit
       );
       await launcher.screenshot({ path: resolve(root, ".evidence/l2/launcher-after.png") });
     });
-    await test.step("Play opens the game through the drive command", async () => {
-      await drive(["click", "launcher", "Play"]);
-      await expect
-        .poll(() => application.windows().some((page) => page.url() === "moxi://app/game/"))
-        .toBe(true);
-    });
-    const game = application.windows().find((page) => page.url() === "moxi://app/game/");
-    if (!game) throw new Error("Game did not open");
-    await test.step("Hub works above the unavailable client and closes with Escape", async () => {
-      await expect(game.getByRole("status")).toHaveText(
-        "The game client is unavailable. Run fetch-client and restart Moxi.",
-      );
-      await game.screenshot({ path: resolve(root, ".evidence/w1/game-before.png") });
-      await game.keyboard.press(process.platform === "darwin" ? "Meta+r" : "Control+r");
-      await expect(game.getByRole("dialog", { name: "Hub", exact: true })).toBeVisible();
-      await expect(game.locator("html")).toHaveAttribute("data-ui-style", "obsidian");
-      await game.screenshot({ path: resolve(root, ".evidence/l2/hub-modern.png") });
-      await launcher.getByRole("combobox", { name: /^Panel style/ }).selectOption("classic");
-      await expect(game.locator("html")).toHaveAttribute("data-ui-style", "classic");
-      await launcher.getByRole("combobox", { name: /^Panel style/ }).selectOption("custom");
-      await launcher.getByRole("combobox", { name: /^Panel finish/ }).selectOption("modern");
-      await expect(game.locator("html")).toHaveAttribute("data-ui-style", "obsidian");
-      await expect(launcher.locator("html")).toHaveAttribute("data-ui-style", "obsidian");
-      await launcher.getByRole("combobox", { name: /^Panel style/ }).selectOption("obsidian");
-      await expect(game.locator("html")).toHaveAttribute("data-ui-style", "obsidian");
-      await game.getByRole("textbox").fill("10 ecto in p");
+    await test.step("an offline fresh install shows repair and rejects game.open", async () => {
       await expect(
-        game.getByText("10 Globs of Ectoplasm = 82 platinum", { exact: true }),
-      ).toBeVisible();
-      await game.screenshot({ path: resolve(root, ".evidence/w1/hub-open.png") });
-      await game.keyboard.press("Escape");
-      await expect(game.getByRole("textbox")).toHaveValue("");
-      await game.keyboard.press("Escape");
-      await expect(game.getByRole("dialog", { name: "Hub", exact: true })).toHaveCount(0);
-    });
-    await test.step("the game cannot invoke game.open", async () => {
-      await expect(game.getByLabel("Guild Wars")).toBeVisible();
+        launcher.getByRole("button", { name: "Open Game Files", exact: true }),
+      ).toBeEnabled();
+      await expect(launcher.getByRole("button", { name: "Play", exact: true })).toHaveCount(0);
       expect(
-        await game.evaluate(async () => {
-          const bridge: unknown = Reflect.get(window, "moxi");
-          if (
-            typeof bridge !== "object" ||
-            bridge === null ||
-            !("invoke" in bridge) ||
-            typeof bridge.invoke !== "function"
-          )
-            throw new Error("Game bridge is missing");
+        await launcher.evaluate(async () => {
           try {
+            const bridge: unknown = Reflect.get(window, "moxi");
+            if (
+              typeof bridge !== "object" ||
+              bridge === null ||
+              !("invoke" in bridge) ||
+              typeof bridge.invoke !== "function"
+            )
+              throw new Error("Launcher bridge is missing");
             await bridge.invoke("game.open", undefined);
             return "allowed";
           } catch (error) {
             return error instanceof Error ? error.message : String(error);
           }
         }),
-      ).toBe("This window cannot use that action.");
-      await drive(["key", "game", "Escape"]);
-      await drive(["screenshot", "game", testInfo.outputPath("game.png")]);
-      expect((await drive(["windows"])).stdout).toContain("game\tMoxi");
+      ).toContain("This app action was rejected.");
+      await launcher.getByRole("button", { name: "Open Game Files", exact: true }).click();
+      await expect(launcher.getByText("Repair needed", { exact: true })).toBeVisible();
+      await launcher.screenshot({ path: resolve(root, ".evidence/g1/offline-repair.png") });
+      await launcher.getByRole("button", { name: "Repair game files", exact: true }).click();
+      await expect(
+        launcher.getByRole("main").getByText("Downloading the playable client", { exact: true }),
+      ).toBeVisible();
+      await expect(launcher.getByRole("button", { name: "Play", exact: true })).toBeDisabled();
+      await expect(launcher.getByText("Repair needed", { exact: true })).toBeVisible();
+      expect(application.windows().some((page) => page.url() === "moxi://app/game/")).toBe(false);
     });
     await test.step("a second launch focuses the first launcher and exits", async () => {
       await application.evaluate(({ BrowserWindow }) => {

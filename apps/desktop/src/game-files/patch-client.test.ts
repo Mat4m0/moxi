@@ -295,3 +295,21 @@ it("refuses a competing writer without removing the live writer's lock", async (
   expect(await readdir(lock)).toEqual([String(process.pid)]);
   expect(await cache.state()).toEqual({ active: null, candidate: null, previous: null });
 });
+
+it("reports artifact bytes monotonically without counting snapshot bytes", async () => {
+  const { cache } = await fixture("none", undefined, true);
+  const progress: number[][] = [];
+  await cache.prepare((received, total) => progress.push([received, total]));
+  expect(progress).toEqual([
+    [0, 12],
+    [4, 12],
+    [8, 12],
+    [12, 12],
+  ]);
+  const verified: number[][] = [];
+  await cache.prepare((received, total) => verified.push([received, total]));
+  expect(verified).toEqual([
+    [0, 12],
+    [12, 12],
+  ]);
+});

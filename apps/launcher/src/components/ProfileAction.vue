@@ -10,7 +10,7 @@ const emit = defineEmits<{ play: [id: string]; cancel: [id: string] }>();
   <button
     v-if="profile.state === 'running'"
     class="profile-action"
-    :disabled="busy"
+    :disabled="busy || readiness.state === 'preparing'"
     :aria-label="`Show ${profile.name}`"
     @click="emit('play', profile.id)"
   >
@@ -19,7 +19,7 @@ const emit = defineEmits<{ play: [id: string]; cancel: [id: string] }>();
   <button
     v-else-if="profile.state === 'ready' || profile.state === 'failed'"
     class="profile-action"
-    :disabled="busy"
+    :disabled="busy || readiness.state === 'preparing'"
     :aria-label="`${readiness.state === 'repair-required' ? 'Repair game files for' : profile.state === 'failed' ? 'Try again for' : 'Play'} ${profile.name}`"
     @click="emit('play', profile.id)"
   >
