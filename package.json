@@ -14,7 +14,8 @@
     "fetch-client": "node scripts/fetch-client.ts",
     "drive": "node scripts/drive.ts",
     "e2e": "pnpm build && playwright test",
-    "hub": "node scripts/build-plugins.ts && vp dev --config apps/game/src/hub/dev/vite.config.ts"
+    "hub": "node scripts/build-plugins.ts && vp dev --config apps/game/src/hub/dev/vite.config.ts",
+    "launcher": "pnpm --filter @moxi/launcher exec vp dev --host 127.0.0.1 --port 4615 --strictPort"
   },
   "devDependencies": {
     "@electron/fuses": "2.1.2",

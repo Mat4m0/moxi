@@ -1,3 +1,4 @@
+import vue from "@vitejs/plugin-vue";
 import { builtinModules } from "node:module";
 import { defineConfig } from "vite-plus";
 import type { OxlintOverride } from "vite-plus/lint";
@@ -48,6 +49,7 @@ const desktopImports = [
 const rendererPackages = ["desktop", "launcher", "game", "plugin-host"];
 
 export default defineConfig({
+  plugins: [vue()],
   fmt: { ignorePatterns: ["AGENTS.md", "CLAUDE.md", "docs/**"] },
   lint: {
     options: { typeAware: true, typeCheck: true },
