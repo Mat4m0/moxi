@@ -161,38 +161,24 @@ function createWindow(kind: WindowKind) {
   windows.set(win.webContents.id, { kind, window: win });
   const id = win.webContents.id;
   if (kind === "game") {
+    // Record a failed client update before the window goes away; closing always wins.
     let closing = false;
+    const end = (crashed: boolean) => {
+      if (closing) return;
+      closing = true;
+      void (sessions.get(id)?.client ?? client)
+        .end(crashed)
+        .then((failed) => (failed ? readiness.retry() : undefined))
+        .catch((error: unknown) => console.warn("[moxi] Failed client was not recorded", error))
+        .finally(() => {
+          if (!win.isDestroyed()) win.destroy();
+        });
+    };
     win.on("close", (event) => {
       event.preventDefault();
-      if (closing) return;
-      closing = true;
-      void (sessions.get(id)?.client ?? client)
-        .end()
-        .then(async (failed) => {
-          if (failed) await readiness.retry();
-          win.destroy();
-        })
-        .catch(() => {
-          closing = false;
-          console.warn(
-            "[moxi] Failed client could not be recorded. Close the window to try again.",
-          );
-        });
+      end(false);
     });
-    win.webContents.on("render-process-gone", () => {
-      if (closing) return;
-      closing = true;
-      void (sessions.get(id)?.client ?? client)
-        .end(true)
-        .then(async (failed) => {
-          if (failed) await readiness.retry();
-          if (!win.isDestroyed()) win.destroy();
-        })
-        .catch(() => {
-          closing = false;
-          console.warn("[moxi] Failed client could not be recorded.");
-        });
-    });
+    win.webContents.on("render-process-gone", () => end(true));
   }
   win.on("closed", () => {
     network.closeWindow(id);
