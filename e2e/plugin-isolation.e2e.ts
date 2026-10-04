@@ -26,6 +26,7 @@ test("opaque plugin workers cannot access storage, game files or network and lea
   for (const [name, value] of Object.entries(process.env))
     if (value !== undefined) env[name] = value;
   env.MOXI_DATA_DIR = data;
+  env.MOXI_BACKGROUND = "1";
   env.MOXI_GAME_CACHE = join(data, "game");
   env.MOXI_PATCH_ROOT = `http://127.0.0.1:${address.port}`;
   delete env.ELECTRON_RUN_AS_NODE;

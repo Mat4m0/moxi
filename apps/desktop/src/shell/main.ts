@@ -53,6 +53,9 @@ if (!app.isPackaged && process.env.MOXI_CDP_PORT) {
   app.commandLine.appendSwitch("remote-debugging-port", String(port));
   writeFileSync(join(folders.data, "cdp.json"), JSON.stringify({ port }));
 }
+// Tests and agents run the app without a Dock icon, visible windows or focus changes.
+const background = !app.isPackaged && process.env.MOXI_BACKGROUND === "1";
+if (background && process.platform === "darwin") app.setActivationPolicy("accessory");
 const windows = new Map<number, { kind: WindowKind; window: BrowserWindow }>();
 const network = createGameNetwork((owner, event) => {
   const contents = windows.get(owner)?.window.webContents;
@@ -121,7 +124,7 @@ function createWindow(kind: WindowKind) {
     height: 640,
     minWidth: 640,
     minHeight: 480,
-    show: kind !== "pluginHost",
+    show: kind !== "pluginHost" && !background,
     title: identity.productName,
     webPreferences: {
       ...(kind === "pluginHost" ? { partition: "persist:plugins" } : {}),
@@ -151,6 +154,10 @@ function createWindow(kind: WindowKind) {
       });
     });
   }
+  if (background) {
+    win.setOpacity(0);
+    win.setIgnoreMouseEvents(true);
+  }
   windows.set(win.webContents.id, { kind, window: win });
   const id = win.webContents.id;
   win.on("closed", () => {
@@ -172,11 +179,15 @@ function createWindow(kind: WindowKind) {
     .catch((error: unknown) => console.error("[moxi] Window could not load", error));
   return win;
 }
+function reveal(win: BrowserWindow) {
+  if (background) return win.showInactive();
+  win.show();
+  win.focus();
+}
 function showLauncher() {
   if (!launcher || launcher.isDestroyed()) launcher = createWindow("launcher");
   if (launcher.isMinimized()) launcher.restore();
-  launcher.show();
-  launcher.focus();
+  reveal(launcher);
 }
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
@@ -380,8 +391,7 @@ else {
         () => {
           readiness.assertPlayable();
           if (!game || game.isDestroyed()) game = createWindow("game");
-          game.show();
-          game.focus();
+          reveal(game);
           return undefined;
         },
         windowKind,

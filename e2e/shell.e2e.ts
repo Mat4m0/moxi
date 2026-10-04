@@ -43,6 +43,7 @@ async function environment(data: string) {
     if (value !== undefined) env[name] = value;
   }
   env.MOXI_DATA_DIR = data;
+  env.MOXI_BACKGROUND = "1";
   // A closed local patch endpoint keeps ArenaNet out of both journeys.
   env.MOXI_GAME_CACHE = join(data, "game");
   env.MOXI_PATCH_ROOT = "http://127.0.0.1:4699";
@@ -214,7 +215,7 @@ test("shell keeps one launcher, rejects launcher actions from the game, and quit
       await drive(["screenshot", "game", testInfo.outputPath("game.png")]);
       expect((await drive(["windows"])).stdout).toContain("game\tMoxi");
     });
-    await test.step("a second launch focuses the first launcher and exits", async () => {
+    await test.step("a second launch shows the first launcher and exits", async () => {
       await application.evaluate(({ BrowserWindow }) => {
         BrowserWindow.getAllWindows()
           .find((win) => win.webContents.getURL() === "moxi://app/launcher/")
@@ -232,11 +233,10 @@ test("shell keeps one launcher, rejects launcher actions from the game, and quit
             return {
               count: launchers.length,
               visible: launchers[0]?.isVisible(),
-              focused: launchers[0]?.isFocused(),
             };
           }),
         )
-        .toEqual({ count: 1, visible: true, focused: true });
+        .toEqual({ count: 1, visible: true });
     });
     await test.step("quitting exits cleanly and leaves no child processes", async () => {
       const snapshot = await processes();

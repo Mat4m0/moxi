@@ -109,6 +109,7 @@ const env = {
   ...(fixtureCache
     ? { MOXI_GAME_CACHE: fixtureCache, MOXI_PATCH_ROOT: "http://127.0.0.1:4699" }
     : {}),
+  ...(process.argv.includes("--background") ? { MOXI_BACKGROUND: "1" } : {}),
   MOXI_CDP_PORT: String(port),
   MOXI_LAUNCHER_URL: "http://127.0.0.1:4611",
   MOXI_GAME_URL: "http://127.0.0.1:4612",
