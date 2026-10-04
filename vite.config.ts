@@ -65,6 +65,17 @@ export default defineConfig({
         rules: imports([...desktopImports, "electron"], ["launcher", "game", "plugin-host"]),
       },
       {
+        files: ["apps/desktop/src/storage/**"],
+        rules: imports([...desktopImports, "arktype"], ["launcher", "game", "plugin-host"]),
+      },
+      {
+        files: ["apps/desktop/src/storage/**/*.test.ts"],
+        rules: imports(
+          [...desktopImports, "arktype", "vite-plus/test"],
+          ["launcher", "game", "plugin-host"],
+        ),
+      },
+      {
         files: ["apps/launcher/**"],
         rules: imports(
           ["vue", "@moxi/contracts", "@moxi/ui"],

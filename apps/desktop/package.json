@@ -4,7 +4,8 @@
   "type": "module",
   "dependencies": {
     "@moxi/contracts": "workspace:*",
-    "@moxi/gwkit": "workspace:*"
+    "@moxi/gwkit": "workspace:*",
+    "arktype": "2.2.7"
   },
   "devDependencies": {
     "electron": "44.5.1"

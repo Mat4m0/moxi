@@ -23,6 +23,9 @@ importers:
       '@moxi/gwkit':
         specifier: workspace:*
         version: link:../../packages/gwkit
+      arktype:
+        specifier: 2.2.7
+        version: 2.2.7
     devDependencies:
       electron:
         specifier: 44.5.1
