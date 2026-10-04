@@ -120,5 +120,9 @@ export default defineConfig({
       },
     ],
   },
-  test: { passWithNoTests: true, watch: false },
+  test: {
+    passWithNoTests: true,
+    watch: false,
+    exclude: ["**/node_modules/**", "**/.git/**", "**/hub.contract.test.ts"],
+  },
 });

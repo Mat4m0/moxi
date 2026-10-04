@@ -24,6 +24,7 @@ export type HubState = {
   plugins: Record<string, PluginInstance>;
   views: Record<string, { pluginId: string; view: WireView }>;
   queryResults: Record<string, WireItem[]>;
+  queryFor: { text: string; scope: string | null } | null;
   toasts: (HubToast & { id: number; plugin: string })[];
   log: { at: number; text: string; tone: "info" | "refused" | "error" }[];
   gameActions: string[];
@@ -62,5 +63,13 @@ export type HubPort = {
 };
 
 export function emptyHubState(): HubState {
-  return { plugins: {}, views: {}, queryResults: {}, toasts: [], log: [], gameActions: [] };
+  return {
+    plugins: {},
+    views: {},
+    queryResults: {},
+    queryFor: null,
+    toasts: [],
+    log: [],
+    gameActions: [],
+  };
 }

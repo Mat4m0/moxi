@@ -50,6 +50,7 @@ export class PluginHost {
           this.hubSession++;
           this.queryGen++;
           this.state.queryResults = {};
+          this.state.queryFor = null;
           for (const p of Object.values(this.state.plugins))
             if (p.enabled && p.manifest.activation.includes("hub"))
               void this.ensureStarted(p.manifest.id);
@@ -60,6 +61,7 @@ export class PluginHost {
           this.hubSession++;
           this.queryGen++;
           this.state.queryResults = {};
+          this.state.queryFor = null;
           for (const viewId of Object.keys(this.state.views)) this.closeView(viewId);
           this.changed();
           break;
@@ -442,6 +444,10 @@ export class PluginHost {
           this.send(id, { t: "query", reqId, text, scope });
         });
         if (gen === this.queryGen && this.hubOpen && this.running.get(id) === r) {
+          if (this.state.queryFor?.text !== text || this.state.queryFor.scope !== scope) {
+            this.state.queryResults = {};
+            this.state.queryFor = { text, scope };
+          }
           this.state.queryResults[id] = items;
           this.changed();
         }

@@ -6,7 +6,8 @@ import type { ActionResult, Observed, Slice } from "@moxi/sdk";
 export const host = reactive(emptyHubState());
 let port: HubPort | undefined;
 let seq = 0;
-const pending = new Map<number, (viewId: string | null) => void>();
+let session = 0;
+const pending = new Map<number, { session: number; resolve: (viewId: string | null) => void }>();
 let performAction:
   | ((op: "game.loadBuild" | "game.travel", args: unknown) => Promise<ActionResult>)
   | undefined;
@@ -20,7 +21,8 @@ export function connectHub(connection: HubPort) {
   connection.listen((message) => {
     if (message.t === "state") Object.assign(host, message.state);
     else if (message.t === "commandResult") {
-      pending.get(message.requestId)?.(message.viewId);
+      const command = pending.get(message.requestId);
+      if (command?.session === session) command.resolve(message.viewId);
       pending.delete(message.requestId);
     } else if (message.t === "gameAction") {
       void (
@@ -41,10 +43,12 @@ export function publishFacts(values: Record<Slice, Observed<unknown>>) {
   post({ t: "facts", values });
 }
 export function startHubPlugins() {
+  session++;
   post({ t: "openHub" });
 }
 export function endHubSession() {
-  for (const resolve of pending.values()) resolve(null);
+  session++;
+  for (const command of pending.values()) command.resolve(null);
   pending.clear();
   post({ t: "closeHub" });
 }
@@ -54,7 +58,7 @@ export function query(text: string, scope: string | null) {
 export function runCommand(pluginId: string, commandId: string): Promise<string | null> {
   const requestId = ++seq;
   return new Promise((resolve) => {
-    pending.set(requestId, resolve);
+    pending.set(requestId, { session, resolve });
     post({ t: "command", requestId, pluginId, commandId });
   });
 }

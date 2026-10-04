@@ -3,8 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "vp check && vp test",
+    "check": "vp check && vp test && pnpm test:hub",
     "test": "vp test",
+    "test:hub": "vp test --config apps/game/src/hub/test/vite.config.ts",
     "fmt": "vp fmt",
     "ui": "vp dev --config packages/ui/vite.config.ts",
     "dev": "node scripts/dev.ts",

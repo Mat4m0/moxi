@@ -215,3 +215,74 @@ test("a delayed command cannot restore a view from a closed Hub session", async 
   });
   expect(h.host.state.views).toEqual({});
 });
+
+test("Results from a new query never mix with another plugin's previous query and closing clears them", async () => {
+  const h = harness();
+  h.host.register(
+    {
+      id: "test.second",
+      name: "Second fixture",
+      version: "1.0.0",
+      api: 1,
+      description: "Second query contributor",
+      permissions: [],
+      activation: ["hub"],
+      commands: [],
+    },
+    "fixture",
+    0,
+  );
+  await h.command("capture");
+  h.send({ t: "query", text: "first", scope: null });
+  await h.until(() => Object.keys(h.host.state.queryResults).length === 2);
+  expect(h.host.state.queryFor).toEqual({ text: "first", scope: null });
+  const before = h.messages.length;
+  h.send({ t: "query", text: "second", scope: "builds" });
+  await h.until(() =>
+    h.messages
+      .slice(before)
+      .some(
+        (m) =>
+          m.t === "state" &&
+          m.state.queryFor?.text === "second" &&
+          Object.keys(m.state.queryResults).length === 2,
+      ),
+  );
+  const firstResult = h.messages
+    .slice(before)
+    .find((m) => m.t === "state" && m.state.queryFor?.text === "second");
+  if (firstResult?.t !== "state") throw new Error("Missing query results");
+  expect(firstResult.state.queryFor).toEqual({ text: "second", scope: "builds" });
+  expect(Object.values(firstResult.state.queryResults)).toEqual([
+    [{ id: "new", title: "new", actions: [] }],
+  ]);
+  h.send({ t: "closeHub" });
+  await h.until(() => h.host.state.queryFor === null);
+  expect(h.host.state.queryResults).toEqual({});
+  h.send({ t: "openHub" });
+  await h.command("clear");
+  expect({ queryFor: h.host.state.queryFor, queryResults: h.host.state.queryResults }).toEqual({
+    queryFor: null,
+    queryResults: {},
+  });
+  h.send({ t: "query", text: "old", scope: null });
+  await h.until(
+    () =>
+      h.host.state.plugins["test.protocol"]!.items[0]?.title === "Old query received" &&
+      h.host.state.plugins["test.second"]!.items[0]?.title === "Old query received",
+  );
+  h.send({ t: "closeHub" });
+  h.send({ t: "openHub" });
+  h.send({ t: "query", text: "current", scope: null });
+  await h.until(
+    () =>
+      h.host.state.queryFor?.text === "current" &&
+      Object.keys(h.host.state.queryResults).length === 2,
+  );
+  await h.command("clear");
+  expect(h.host.state.queryFor).toEqual({ text: "current", scope: null });
+  expect(Object.values(h.host.state.queryResults)).toEqual([
+    [{ id: "new", title: "new", actions: [] }],
+    [{ id: "new", title: "new", actions: [] }],
+  ]);
+});

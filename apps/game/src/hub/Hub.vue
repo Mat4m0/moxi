@@ -47,7 +47,7 @@ const formValues = ref<Record<string, string | boolean>>({});
 const followTop = ref(true); // until the player moves the selection, the top hit is selected
 
 startHubPlugins();
-// Results computed for an earlier Hub session are never shown in a new one.
+const queryResults = ref<Record<string, WireItem[]>>({});
 
 const scopes = computed(
   () =>
@@ -56,6 +56,15 @@ const scopes = computed(
     ),
 );
 const parsed = computed(() => parseScope(top.value.query, scopes.value));
+
+watch(
+  [() => host.queryFor, () => host.queryResults, parsed],
+  () => {
+    if (host.queryFor?.text === parsed.value.text && host.queryFor.scope === parsed.value.scope)
+      queryResults.value = host.queryResults;
+  },
+  { immediate: true },
+);
 
 const rootRows = computed<Row[]>(() => {
   const { scope, text } = parsed.value;
@@ -105,7 +114,7 @@ const rootRows = computed<Row[]>(() => {
   );
   const results: Row[] = scope
     ? []
-    : Object.entries(host.queryResults).flatMap(([pid, items]) =>
+    : Object.entries(queryResults.value).flatMap(([pid, items]) =>
         items.map((item) => ({
           key: `q:${pid}:${item.id}`,
           pluginId: pid,
@@ -144,6 +153,7 @@ watch(
   rows,
   (now) => {
     const t = performance.now();
+    for (const key of firstSeen.keys()) if (!now.some((r) => r.key === key)) firstSeen.delete(key);
     for (const r of now) if (!firstSeen.has(r.key)) firstSeen.set(r.key, t);
     const e = top.value;
     if (followTop.value) e.selected = now[0]?.key ?? null;
@@ -153,20 +163,17 @@ watch(
 );
 
 let queryTimer: ReturnType<typeof setTimeout> | undefined;
-watch(
-  () => top.value.query,
-  (q) => {
-    followTop.value = true;
-    const e = top.value;
-    e.selected = rows.value[0]?.key ?? null;
-    if (!e.viewId) {
-      clearTimeout(queryTimer);
-      queryTimer = setTimeout(() => void runQuery(parsed.value.text, parsed.value.scope), 40);
-    } else if (view.value?.type === "list" && view.value.filter === "plugin") {
-      invoke(e.pluginId!, e.viewId, "$search", [q], false);
-    }
-  },
-);
+watch([top, () => top.value.query], ([e, q], [previous]) => {
+  if (e !== previous) return;
+  followTop.value = true;
+  e.selected = rows.value[0]?.key ?? null;
+  if (!e.viewId) {
+    clearTimeout(queryTimer);
+    queryTimer = setTimeout(() => void runQuery(parsed.value.text, parsed.value.scope), 40);
+  } else if (view.value?.type === "list" && view.value.filter === "plugin") {
+    invoke(e.pluginId!, e.viewId, "$search", [q], false);
+  }
+});
 
 const selectedRow = computed(() => rows.value.find((r) => r.key === top.value.selected) ?? null);
 const detailActions = computed(() => (view.value?.type === "detail" ? view.value.actions : []));
@@ -205,6 +212,14 @@ function back() {
 }
 
 async function run(row: Row | null, action: WireAction, confirmed = false) {
+  if (
+    row &&
+    !rows.value.some(
+      (current) =>
+        current.key === row.key && JSON.stringify(current.item) === JSON.stringify(row.item),
+    )
+  )
+    return;
   if (action.confirm && !confirmed) {
     confirming.value = { row: row!, action };
     return;
@@ -292,12 +307,12 @@ function move(delta: number) {
 }
 
 function escape() {
-  if (confirming.value) {
-    confirming.value = null;
-    return;
-  }
   if (actionsOpen.value) {
     actionsOpen.value = false;
+    return;
+  }
+  if (confirming.value) {
+    confirming.value = null;
     return;
   }
   if (stack.value.length > 1) {
@@ -313,9 +328,24 @@ function escape() {
 
 // While the Hub is open it owns the keyboard at window level, so a key never
 // depends on where focus happens to be (the audit's "focus on <body>" class).
-onMounted(() => window.addEventListener("keydown", onKey, true));
+const pressed = new Set<string>();
+function onKeyUp(e: KeyboardEvent) {
+  if (!pressed.delete(e.code)) return;
+  e.stopImmediatePropagation();
+  if (!root.value && !pressed.size) {
+    window.removeEventListener("keydown", onKey, true);
+    window.removeEventListener("keyup", onKeyUp, true);
+  }
+}
+onMounted(() => {
+  window.addEventListener("keydown", onKey, true);
+  window.addEventListener("keyup", onKeyUp, true);
+});
 onUnmounted(() => {
-  window.removeEventListener("keydown", onKey, true);
+  if (!pressed.size) {
+    window.removeEventListener("keydown", onKey, true);
+    window.removeEventListener("keyup", onKeyUp, true);
+  }
   clearTimeout(queryTimer);
   endHubSession();
 });
@@ -331,13 +361,23 @@ watch(
 );
 
 function onKey(e: KeyboardEvent) {
+  if (!root.value) {
+    if (pressed.has(e.code)) e.stopImmediatePropagation();
+    return;
+  }
   const mod = isMac ? e.metaKey : e.ctrlKey;
-  const inHub = root.value?.contains(document.activeElement);
-  if (!inHub && e.key.length === 1 && !mod && view.value?.type !== "form") focusInput(); // typing always reaches search
-  e.stopPropagation(); // nothing below the Hub sees its keys
+  if (
+    document.activeElement !== input.value &&
+    e.key.length === 1 &&
+    !mod &&
+    view.value?.type !== "form"
+  )
+    focusInput(); // typing always reaches search
+  pressed.add(e.code);
+  e.stopImmediatePropagation(); // window listeners standing in for the game must not see Hub keys
   if (e.key === "Escape") {
     e.preventDefault();
-    escape();
+    if (!e.repeat) escape();
     return;
   }
   if (confirming.value) {
