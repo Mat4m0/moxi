@@ -48,7 +48,7 @@ let launcher: BrowserWindow | undefined;
 let game: BrowserWindow | undefined;
 let client = createClientRoutes(folders.gameCache);
 const csp =
-  "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-9MCtU6XOFDHSPMY3TZr+AvM3Q5P34oe/aBUYK5SY1Es='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; worker-src 'self' blob:; connect-src 'self'";
+  "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; worker-src 'self' blob:; connect-src 'self'";
 const roots = {
   launcher: join(repoRoot, "apps/launcher/dist"),
   game: join(repoRoot, "apps/game/dist"),

@@ -57,7 +57,7 @@ async function boot() {
   const client = await window.moxi.invoke("game.client", undefined);
   const game = createRuntime();
   runtime = game;
-  Module = {
+  globalThis.Module = {
     canvas,
     preRun() {
       mountGameFilesystem(Module, () =>
