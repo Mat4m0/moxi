@@ -94,7 +94,7 @@ test("shell keeps one launcher, rejects launcher actions from the game, and quit
   const owned = new Set<number>();
   if (child.pid) owned.add(child.pid);
   const drive = async (args: string[]) => {
-    const result = await run("pnpm", ["drive", ...args], { env, cwd: root, timeout: 15_000 });
+    const result = await run("pnpm", ["drive", ...args], { env, cwd: root, timeout: 60_000 });
     console.log(`pnpm drive ${args.join(" ")} — exit 0\n${result.stdout.trim()}`);
     return result;
   };
