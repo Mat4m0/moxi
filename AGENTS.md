@@ -38,7 +38,8 @@ pnpm drive <step>       # agents: drive the running Dev app (screens, keys, scre
    input or Node. A game action needs a permission and a fresh player action.
    Multi-step game flows are host actions, never plugin sequences.
 3. No telemetry. Nothing about the player leaves the machine except what the
-   game itself sends and the static files the app downloads.
+   game itself sends, the static files the app downloads, and what the player
+   sends on purpose (such as feedback) after seeing what it contains.
 4. Every capability fails closed on its own; the plain game always stays playable.
 5. Credentials exist only in Main (`safeStorage`); never in logs, renderers,
    plugins, diagnostics or test output.
