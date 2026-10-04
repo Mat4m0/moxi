@@ -52,16 +52,13 @@ let pluginHostReady: Promise<void>;
 let client = createClientRoutes(folders.gameCache);
 const csp =
   "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; worker-src 'self' blob:; connect-src 'self'";
+// electron-builder.config.ts copies each renderer's dist to renderers/<name>.
+const rendererRoot = (name: string) =>
+  app.isPackaged ? join(app.getAppPath(), "renderers", name) : join(repoRoot, "apps", name, "dist");
 const roots = {
-  launcher: app.isPackaged
-    ? join(app.getAppPath(), "renderers/launcher")
-    : join(repoRoot, "apps/launcher/dist"),
-  game: app.isPackaged
-    ? join(app.getAppPath(), "renderers/game")
-    : join(repoRoot, "apps/game/dist"),
-  "plugin-host": app.isPackaged
-    ? join(app.getAppPath(), "renderers/plugin-host")
-    : join(repoRoot, "apps/plugin-host/dist"),
+  launcher: rendererRoot("launcher"),
+  game: rendererRoot("game"),
+  "plugin-host": rendererRoot("plugin-host"),
 };
 function createWindow(kind: WindowKind) {
   if (kind === "game") client = createClientRoutes(folders.gameCache);
