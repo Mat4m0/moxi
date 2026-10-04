@@ -15,8 +15,10 @@ async function echoServer() {
     socket.on("close", () => peers.delete(socket));
     socket.pipe(socket);
   });
-  server.listen(4600, "127.0.0.1");
+  server.listen(0, "127.0.0.1");
   await once(server, "listening");
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Echo server has no port");
   cleanup.push(
     () =>
       new Promise<void>((resolve, reject) => {
@@ -24,7 +26,7 @@ async function echoServer() {
         server.close((error) => (error ? reject(error) : resolve()));
       }),
   );
-  return "127.0.0.1:4600";
+  return `127.0.0.1:${address.port}`;
 }
 
 // These cases catch private-network access and suffix lookalikes reaching Main's network.
@@ -93,7 +95,7 @@ test("accepts a late ack after close while refusing foreign socket operations", 
       }
       if (event.kind === "close") resolveClose();
     },
-    (host, port) => host === "127.0.0.1" && port === 4600,
+    (host, port) => `${host}:${port}` === destination,
   );
   cleanup.push(() => network.closeWindow(10));
   expect(network.hasConnected(10)).toBe(false);
@@ -135,7 +137,7 @@ test("closes a connection when a write exceeds the buffer bound", async () => {
       if (event.kind === "open") resolveOpen();
       if (event.kind === "close") resolveClose();
     },
-    (host, port) => host === "127.0.0.1" && port === 4600,
+    (host, port) => `${host}:${port}` === destination,
   );
   cleanup.push(() => network.closeWindow(1));
   network.connect(1, 1, destination);
