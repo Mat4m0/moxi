@@ -15,6 +15,11 @@ import {
 import { parseScope, rank } from "./search.ts";
 import Blocks from "./Blocks.vue";
 import Icon from "./Icon.vue";
+import FrameArtwork from "./FrameArtwork.vue";
+import "@moxi/ui/fonts.css";
+import "@moxi/ui/tokens.css";
+import "@moxi/ui/components.css";
+import "./hub.css";
 
 const emit = defineEmits<{ close: [] }>();
 const isMac = navigator.platform.toLowerCase().includes("mac");
@@ -469,14 +474,44 @@ const preview = computed(() => selectedRow.value?.item.preview ?? null);
 </script>
 
 <template>
-  <div class="scrim" @mousedown.self="emit('close')">
-    <section ref="root" class="hub" role="dialog" aria-label="Hub">
-      <header>
-        <button v-if="stack.length > 1" class="back" aria-label="Back" @click="back">‹</button>
-        <span v-if="title" class="crumb">{{ title }}</span>
-        <span v-else-if="parsed.scope" class="crumb scope">{{ parsed.scope }}</span>
+  <dialog
+    open
+    class="ui-modal ui-modal-layer hub-modal"
+    aria-label="Hub"
+    @mousedown.self="emit('close')"
+  >
+    <section ref="root" class="hub-panel ui-frame">
+      <FrameArtwork />
+      <header class="hub-heading ui-window-head">
+        <button
+          v-if="stack.length > 1"
+          class="hub-back ui-button"
+          data-variant="quiet"
+          aria-label="Back"
+          @click="back"
+        >
+          ←
+        </button>
+        <span class="hub-name">Hub</span>
+        <nav class="hub-breadcrumbs" aria-label="Hub breadcrumb">
+          <span class="hub-caption">{{ title ?? "Home" }}</span>
+        </nav>
+        <span class="hub-context">{{ contextName }}</span>
+        <button
+          class="ui-window-close hub-close"
+          aria-label="Close Hub"
+          title="Close Hub"
+          @click="emit('close')"
+        >
+          ×
+        </button>
+      </header>
+      <div v-if="view?.type !== 'form' && view?.type !== 'detail'" class="hub-search">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m12 2 8 10-8 10L4 12 12 2Zm0 5v10M8 12h8" />
+        </svg>
+        <span v-if="parsed.scope" class="hub-scope">{{ parsed.scope }}</span>
         <input
-          v-if="view?.type !== 'form' && view?.type !== 'detail'"
           ref="input"
           v-model="top.query"
           :placeholder="placeholder"
@@ -484,38 +519,57 @@ const preview = computed(() => selectedRow.value?.item.preview ?? null);
           autocomplete="off"
           aria-label="Search"
         />
-        <span v-else ref="input" tabindex="-1" class="spacer" />
-      </header>
+      </div>
+      <span v-else ref="input" tabindex="-1" class="hub-caption" />
 
-      <div class="body">
-        <template v-if="view?.type === 'detail'">
-          <div class="detail">
+      <template v-if="view?.type === 'detail'">
+        <div class="hub-view">
+          <div class="hub-detail">
             <h2>{{ view.title }}</h2>
             <Blocks :blocks="view.blocks" />
           </div>
-        </template>
+        </div>
+      </template>
 
-        <form v-else-if="view?.type === 'form'" class="form" @submit.prevent="submitForm">
-          <label v-for="(f, i) in view.fields" :key="f.id" class="field">
+      <div v-else-if="view?.type === 'form'" class="hub-view">
+        <form class="form hub-detail" @submit.prevent="submitForm">
+          <label v-for="(f, i) in view.fields" :key="f.id" class="ui-field">
             <span>{{ f.label }}</span>
             <input
               v-if="f.type === 'text'"
+              class="ui-input"
               v-model="formValues[f.id] as string"
               :placeholder="f.placeholder"
               :autofocus="i === 0"
             />
-            <select v-else-if="f.type === 'select'" v-model="formValues[f.id] as string">
+            <select
+              class="ui-select"
+              v-else-if="f.type === 'select'"
+              v-model="formValues[f.id] as string"
+            >
               <option v-for="o in f.options" :key="o.value" :value="o.value">{{ o.label }}</option>
             </select>
             <input v-else type="checkbox" v-model="formValues[f.id] as boolean" />
           </label>
         </form>
+      </div>
 
-        <template v-else>
-          <ul class="list" role="listbox" :aria-activedescendant="top.selected ?? undefined">
-            <li
-              v-for="row in rows"
-              :key="row.key"
+      <template v-else>
+        <div
+          class="hub-results ui-scroll"
+          role="listbox"
+          :aria-activedescendant="top.selected ?? undefined"
+        >
+          <template v-for="(row, index) in rows" :key="row.key">
+            <div
+              v-if="index === 0 || rows[index - 1].kind !== row.kind"
+              class="hub-group"
+              role="presentation"
+            >
+              {{ row.kind === "command" ? "Commands" : "Tools" }}
+            </div>
+            <div
+              class="hub-row"
               :data-key="row.key"
               :id="row.key"
               role="option"
@@ -529,14 +583,14 @@ const preview = computed(() => selectedRow.value?.item.preview ?? null);
               "
               @dblclick="dblclick(row)"
             >
-              <Icon :icon="row.item.icon" />
-              <span class="title">{{ row.item.title }}</span>
-              <span class="subtitle">{{ row.item.subtitle }}</span>
-              <span class="acc">
-                <span v-for="(a, i) in row.item.accessories ?? []" :key="i" class="tag">{{
+              <span class="hub-icon"><Icon :icon="row.item.icon" /></span>
+              <span class="hub-title">{{ row.item.title }}</span>
+              <span class="hub-detail">{{ row.item.subtitle }}</span>
+              <span class="hub-row-type">
+                <span v-for="(a, i) in row.item.accessories ?? []" :key="i" class="ui-kbd">{{
                   "text" in a ? a.text : a.label
                 }}</span>
-                <span class="kind">{{
+                <span>{{
                   row.kind === "command"
                     ? "Command"
                     : row.kind === "result"
@@ -544,34 +598,41 @@ const preview = computed(() => selectedRow.value?.item.preview ?? null);
                       : host.plugins[row.pluginId]?.manifest.name
                 }}</span>
               </span>
-            </li>
-            <li v-if="!rows.length" class="empty">
-              {{
-                view?.type === "list" && view.empty && !top.query ? view.empty.title : "No matches"
-              }}
-            </li>
-          </ul>
-          <aside v-if="preview" class="preview"><Blocks :blocks="preview" /></aside>
-        </template>
-      </div>
+            </div>
+          </template>
+          <div v-if="!rows.length" class="hub-empty">
+            {{
+              view?.type === "list" && view.empty && !top.query ? view.empty.title : "No matches"
+            }}
+          </div>
+        </div>
+        <aside v-if="preview" class="hub-preview ui-scroll"><Blocks :blocks="preview" /></aside>
+      </template>
 
-      <footer>
-        <span class="ctx">{{ contextName }}</span>
-        <span class="grow" />
+      <footer class="hub-footer">
+        <span class="hub-count">{{ rows.length }} result{{ rows.length === 1 ? "" : "s" }}</span>
         <template v-if="view?.type === 'form'">
-          <button class="primary" @click="submitForm">
+          <button class="hub-primary ui-button" data-variant="primary" @click="submitForm">
             {{ view.submitTitle }} <kbd>{{ isMac ? "⌘" : "Ctrl" }}</kbd
             ><kbd>↵</kbd>
           </button>
         </template>
         <template v-else>
-          <button v-if="primary" class="primary" @click="run(selectedRow, primary)">
+          <button
+            v-if="primary"
+            class="hub-primary ui-button"
+            data-variant="primary"
+            @click="run(selectedRow, primary)"
+          >
             {{ primary.title }} <kbd>↵</kbd>
           </button>
-          <span v-else class="hint">Select a result</span>
+          <button v-else class="hub-primary ui-button" data-variant="primary" disabled>
+            Select a result
+          </button>
           <button
             v-if="currentActions.length > 1"
-            class="actions"
+            class="hub-actions ui-button"
+            data-variant="quiet"
             @click="
               actionsOpen = !actionsOpen;
               actionIndex = 0;
@@ -581,342 +642,46 @@ const preview = computed(() => selectedRow.value?.item.preview ?? null);
             ><kbd>K</kbd>
           </button>
         </template>
-      </footer>
-
-      <div v-if="actionsOpen" class="panel" role="menu">
-        <button
-          v-for="(a, i) in currentActions"
-          :key="a.id"
-          role="menuitem"
-          :class="{ active: i === actionIndex, danger: a.style === 'destructive' }"
-          @mousemove="actionIndex = i"
-          @click="run(selectedRow, a)"
-        >
-          <span>{{ a.title }}</span>
-          <span class="keys"
-            ><kbd v-for="k in i === 0 ? ['↵'] : keycap(a.shortcut)" :key="k">{{ k }}</kbd></span
+        <div v-if="actionsOpen" class="ui-frame ui-hub-actions" role="menu">
+          <button
+            v-for="(a, i) in currentActions"
+            :key="a.id"
+            class="ui-button"
+            role="menuitem"
+            :aria-pressed="i === actionIndex"
+            :data-variant="a.style === 'destructive' ? 'danger' : 'quiet'"
+            @mousemove="actionIndex = i"
+            @click="run(selectedRow, a)"
           >
-        </button>
-      </div>
+            <span>{{ a.title }}</span>
+            <span class="ui-hub-keycaps"
+              ><kbd v-for="k in i === 0 ? ['↵'] : keycap(a.shortcut)" :key="k">{{ k }}</kbd></span
+            >
+          </button>
+        </div>
+      </footer>
 
       <div
         v-if="confirming"
-        class="confirm"
+        class="ui-frame ui-hub-confirm"
         role="alertdialog"
         :aria-label="confirming.action.confirm?.title"
       >
         <h3>{{ confirming.action.confirm?.title }}</h3>
         <p>{{ confirming.action.confirm?.message }}</p>
-        <div class="row">
-          <button @click="confirming = null">Cancel <kbd>Esc</kbd></button>
-          <button class="danger" @click="run(confirming.row, confirming.action, true)">
+        <div class="ui-hub-confirm-actions">
+          <button class="ui-button" data-variant="quiet" @click="confirming = null">
+            Cancel <kbd>Esc</kbd>
+          </button>
+          <button
+            class="ui-button"
+            data-variant="danger"
+            @click="run(confirming.row, confirming.action, true)"
+          >
             {{ confirming.action.confirm?.confirmLabel ?? "Confirm" }} <kbd>↵</kbd>
           </button>
         </div>
       </div>
     </section>
-  </div>
+  </dialog>
 </template>
-
-<style scoped>
-.scrim {
-  position: fixed;
-  inset: 0;
-  display: grid;
-  justify-items: center;
-  align-items: start;
-  padding-top: 12vh;
-  background: rgb(0 0 0 / 0.18);
-}
-.hub {
-  position: relative;
-  width: min(760px, calc(100vw - 32px));
-  height: 460px;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  grid-template-columns: minmax(0, 1fr);
-  background: var(--surface-1);
-  color: var(--text-1);
-  border-radius: 14px;
-  overflow: hidden;
-  box-shadow:
-    0 0 0 1px var(--line),
-    0 24px 70px rgb(0 0 0 / 0.55);
-  font: 13px/1.4 var(--font-ui);
-}
-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 14px;
-  height: 52px;
-  border-bottom: 1px solid var(--line);
-}
-header input {
-  flex: 1;
-  background: none;
-  border: 0;
-  outline: 0;
-  color: var(--text-1);
-  font: 400 16px var(--font-ui);
-}
-header input::placeholder {
-  color: var(--text-3);
-}
-.spacer {
-  flex: 1;
-  outline: none;
-}
-.back {
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
-  border: 0;
-  background: var(--surface-3);
-  color: var(--text-1);
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-}
-.crumb {
-  padding: 3px 8px;
-  border-radius: 6px;
-  background: var(--surface-3);
-  color: var(--text-2);
-  font-weight: 500;
-  white-space: nowrap;
-}
-.crumb.scope {
-  background: var(--accent-soft);
-  color: var(--accent-text);
-  text-transform: capitalize;
-}
-.body {
-  display: flex;
-  min-height: 0;
-}
-.list {
-  flex: 1;
-  margin: 0;
-  padding: 6px;
-  list-style: none;
-  overflow-y: auto;
-  min-width: 0;
-}
-.list li {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: 38px;
-  padding: 0 10px;
-  border-radius: 8px;
-  cursor: default;
-}
-.list li.selected {
-  background: var(--surface-3);
-}
-.title {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-  flex: 0 1 auto;
-}
-.subtitle {
-  color: var(--text-3);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 1 1 0;
-  min-width: 0;
-}
-.acc {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  flex: none;
-}
-.tag {
-  font-size: 11px;
-  color: var(--text-3);
-  padding: 1px 6px;
-  border-radius: 5px;
-  box-shadow: inset 0 0 0 1px var(--line);
-}
-.kind {
-  font-size: 11px;
-  color: var(--text-3);
-  min-width: 60px;
-  text-align: right;
-}
-.empty {
-  color: var(--text-3);
-  justify-content: center;
-  height: 120px !important;
-}
-.preview {
-  width: 260px;
-  flex: none;
-  padding: 16px;
-  border-left: 1px solid var(--line);
-  overflow-y: auto;
-}
-.detail {
-  padding: 18px 20px;
-  overflow-y: auto;
-  flex: 1;
-}
-.detail h2 {
-  margin: 0 0 14px;
-  font: 600 17px var(--font-ui);
-}
-.form {
-  padding: 18px 20px;
-  display: grid;
-  gap: 12px;
-  align-content: start;
-  flex: 1;
-}
-.field {
-  display: grid;
-  grid-template-columns: 130px 1fr;
-  align-items: center;
-  gap: 12px;
-  color: var(--text-2);
-}
-.field input:not([type="checkbox"]),
-.field select {
-  height: 30px;
-  padding: 0 9px;
-  border-radius: 7px;
-  border: 0;
-  background: var(--surface-2);
-  color: var(--text-1);
-  box-shadow: inset 0 0 0 1px var(--line);
-  font: inherit;
-  outline-offset: 0;
-}
-.field input:focus-visible,
-.field select:focus-visible {
-  outline: 2px solid var(--accent);
-}
-footer {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 42px;
-  padding: 0 10px 0 14px;
-  border-top: 1px solid var(--line);
-  background: var(--surface-0);
-}
-.ctx {
-  color: var(--text-3);
-  font-size: 12px;
-}
-.grow {
-  flex: 1;
-}
-.hint {
-  color: var(--text-3);
-  font-size: 12px;
-}
-footer button,
-.confirm button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: 7px;
-  background: none;
-  color: var(--text-1);
-  font: 500 12px var(--font-ui);
-  cursor: pointer;
-}
-footer button:hover,
-.confirm button:hover {
-  background: var(--surface-3);
-}
-footer .actions {
-  color: var(--text-2);
-}
-kbd {
-  min-width: 18px;
-  height: 18px;
-  padding: 0 4px;
-  display: inline-grid;
-  place-items: center;
-  border-radius: 4px;
-  background: var(--surface-3);
-  color: var(--text-2);
-  font: 500 11px var(--font-ui);
-}
-.panel {
-  position: absolute;
-  right: 10px;
-  bottom: 48px;
-  width: 280px;
-  padding: 6px;
-  border-radius: 11px;
-  background: var(--surface-2);
-  box-shadow:
-    0 0 0 1px var(--line),
-    0 14px 40px rgb(0 0 0 / 0.5);
-  display: grid;
-  gap: 1px;
-}
-.panel button {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 32px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: 7px;
-  background: none;
-  color: var(--text-1);
-  font: 13px var(--font-ui);
-  text-align: left;
-}
-.panel button.active {
-  background: var(--surface-3);
-}
-.panel button.danger {
-  color: var(--danger);
-}
-.keys {
-  display: flex;
-  gap: 3px;
-}
-.confirm {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  translate: -50% -50%;
-  width: 340px;
-  padding: 18px;
-  border-radius: 12px;
-  background: var(--surface-2);
-  box-shadow:
-    0 0 0 1px var(--line),
-    0 20px 50px rgb(0 0 0 / 0.55);
-}
-.confirm h3 {
-  margin: 0 0 6px;
-  font: 600 14px var(--font-ui);
-}
-.confirm p {
-  margin: 0 0 16px;
-  color: var(--text-2);
-}
-.confirm .row {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-.confirm .danger {
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-</style>

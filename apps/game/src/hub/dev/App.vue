@@ -3,9 +3,19 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { host, publishFacts, onGameAction, setEnabled, setSetting } from "../client.ts";
 import { sim, tick, observe, performAction } from "./game-sim.ts";
 import Hub from "../Hub.vue";
+import { appearanceVariables } from "@moxi/ui";
 import type { HudNode } from "@moxi/sdk";
 
 onGameAction(performAction);
+const uiStyle = ref<"classic" | "obsidian">("classic");
+function applyAppearance(uiPanelOpacity = 94) {
+  document.documentElement.dataset.uiStyle = uiStyle.value;
+  for (const [key, value] of Object.entries(
+    appearanceVariables({ uiStyle: uiStyle.value, uiFont: "guild-wars", uiPanelOpacity }),
+  ))
+    document.documentElement.style.setProperty(key, value);
+}
+applyAppearance();
 const hubOpen = ref(false);
 const gameKeys = ref(0); // key presses that reached "the game"
 const heldFromHub = new Set<string>(); // keys pressed inside Hub; their repeats and releases never reach the game
@@ -117,7 +127,7 @@ const fmtTime = (t: number) =>
         Keys that reached the game: <b>{{ gameKeys }}</b>
       </div>
       <div class="toasts">
-        <div v-for="t in host.toasts" :key="t.id" class="toast" :data-tone="t.tone">
+        <div v-for="t in host.toasts" :key="t.id" class="hub-receipt ui-well" :data-tone="t.tone">
           <b>{{ t.title }}</b
           ><span v-if="t.message">{{ t.message }}</span
           ><small>{{ t.plugin }}</small>
@@ -130,6 +140,13 @@ const fmtTime = (t: number) =>
       <h1>Plugin runtime probe</h1>
       <section>
         <h2>Game simulation</h2>
+        <label
+          >Theme
+          <select v-model="uiStyle" aria-label="Theme" @change="applyAppearance(100)">
+            <option value="classic">Classic</option>
+            <option value="obsidian">Modern</option>
+          </select>
+        </label>
         <label
           >Integration
           <select v-model="sim.mode">
@@ -411,30 +428,6 @@ kbd {
   gap: 8px;
   justify-items: center;
   z-index: 5;
-}
-.toast {
-  display: grid;
-  gap: 1px;
-  min-width: 260px;
-  padding: 9px 14px;
-  border-radius: 10px;
-  background: var(--surface-2);
-  box-shadow:
-    0 0 0 1px var(--line),
-    0 10px 30px rgb(0 0 0 / 0.5);
-}
-.toast[data-tone="positive"] b {
-  color: var(--positive);
-}
-.toast[data-tone="danger"] b {
-  color: var(--danger);
-}
-.toast span {
-  color: var(--text-2);
-}
-.toast small {
-  color: var(--text-3);
-  font-size: 11px;
 }
 .side {
   overflow-y: auto;

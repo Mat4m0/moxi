@@ -7,13 +7,18 @@ defineProps<{ blocks: readonly Block[] }>();
   <div class="blocks">
     <template v-for="(b, i) in blocks" :key="i">
       <p v-if="b.type === 'text'" class="text" :data-tone="b.tone">{{ b.text }}</p>
-      <div v-else-if="b.type === 'skillbar'" class="skillbar" role="list" aria-label="Skill bar">
+      <div
+        v-else-if="b.type === 'skillbar'"
+        class="hub-skill-bar"
+        role="list"
+        aria-label="Skill bar"
+      >
         <span
           v-for="(s, n) in b.skills"
           :key="n"
           role="listitem"
-          class="slot"
-          :class="{ elite: s === b.elite && s !== 0 }"
+          class="hub-skill"
+          :data-elite="s === b.elite && s !== 0"
           :title="s ? `Skill ${s}` : 'Empty slot'"
         >
           {{ n + 1 }}
@@ -36,45 +41,26 @@ defineProps<{ blocks: readonly Block[] }>();
 }
 .text {
   margin: 0;
-  color: var(--text-1);
-  font-size: 13px;
+  color: var(--ui-text);
+  font-size: var(--ui-type-body-size);
   line-height: 1.5;
 }
 .text[data-tone="muted"] {
-  color: var(--text-3);
-}
-.skillbar {
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 4px;
-}
-.slot {
-  aspect-ratio: 1;
-  border-radius: 5px;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(160deg, var(--surface-3), var(--surface-2));
-  box-shadow: inset 0 0 0 1px var(--line);
-  color: var(--text-3);
-  font: 500 10px var(--font-ui);
-}
-.slot.elite {
-  box-shadow: inset 0 0 0 1.5px var(--gold);
-  color: var(--gold);
+  color: var(--ui-text-muted);
 }
 .meta {
   margin: 0;
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 6px 14px;
-  font-size: 12px;
+  font-size: var(--ui-type-caption-size);
 }
 dt {
-  color: var(--text-3);
+  color: var(--ui-text-muted);
 }
 dd {
   margin: 0;
-  color: var(--text-1);
+  color: var(--ui-text);
   overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums;
 }

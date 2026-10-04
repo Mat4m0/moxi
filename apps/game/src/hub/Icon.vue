@@ -75,20 +75,20 @@ const px = computed(() => `${props.size ?? 20}px`);
 .prof {
   display: inline-grid;
   place-items: center;
-  border-radius: 6px;
+  border-radius: var(--ui-radius-sm);
   flex: none;
-  font: 600 9.5px/1 var(--font-ui);
+  font: 600 9.5px/1 var(--ui-font-interface);
   color: rgb(0 0 0 / 0.78);
   letter-spacing: -0.02em;
 }
 .skill {
   display: inline-block;
-  border-radius: 4px;
-  background: var(--surface-3);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-well-fill);
   flex: none;
 }
 .glyph {
   flex: none;
-  color: var(--text-2);
+  color: var(--ui-accent);
 }
 </style>
