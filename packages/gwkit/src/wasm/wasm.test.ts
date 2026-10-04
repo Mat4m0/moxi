@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vite-plus/test";
 import wabtFactory from "wabt";
-import { parseModule, decodeBody, callGraph, WasmError } from "./src/index";
+import { parseModule, decodeBody, callGraph, WasmError } from "../index";
 
 const wabt = await wabtFactory();
 function module(wat: string) {

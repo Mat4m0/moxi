@@ -6,6 +6,7 @@
     ".": "./src/index.ts"
   },
   "devDependencies": {
-    "wabt": "^1.0.39"
+    "@types/node": "24.19.1",
+    "wabt": "1.0.39"
   }
 }
