@@ -75,21 +75,29 @@ export default defineConfig({
       {
         files: ["apps/launcher/**"],
         rules: imports(
-          ["vue", "@moxi/contracts", "@moxi/ui"],
+          ["vue", "@moxi/contracts", "@moxi/ui", "@moxi/ui/*"],
           rendererPackages.filter((name) => name !== "launcher"),
         ),
       },
       {
         files: ["apps/game/**"],
         rules: imports(
-          ["vue", "@moxi/contracts", "@moxi/ui", "@moxi/gwkit", "@moxi/sdk", "@moxi/sdk/host"],
+          [
+            "vue",
+            "@moxi/contracts",
+            "@moxi/ui",
+            "@moxi/ui/*",
+            "@moxi/gwkit",
+            "@moxi/sdk",
+            "@moxi/sdk/host",
+          ],
           rendererPackages.filter((name) => name !== "game"),
         ),
       },
       {
         files: ["apps/plugin-host/**"],
         rules: imports(
-          ["vue", "@moxi/contracts", "@moxi/ui", "@moxi/sdk", "@moxi/sdk/host"],
+          ["vue", "@moxi/contracts", "@moxi/ui", "@moxi/ui/*", "@moxi/sdk", "@moxi/sdk/host"],
           rendererPackages.filter((name) => name !== "plugin-host"),
         ),
       },
