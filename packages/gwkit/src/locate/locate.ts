@@ -57,20 +57,23 @@ export async function locate(
       refused.set(name, { reason: "signature", detail: `Expected ${spec.signature}` });
       continue;
     }
-    let moved: { index: number; matched: boolean } | undefined;
+    let unmatched: number | undefined;
+    let moved: number | undefined;
     for (const caller of callers.get(old.index) ?? []) {
       const matchedCaller = matches.get(caller);
-      if (!matchedCaller || !next.calls[matchedCaller.index]?.includes(match.index)) {
-        moved = { index: caller, matched: matchedCaller !== undefined };
+      if (!matchedCaller) unmatched ??= caller;
+      else if (!next.calls[matchedCaller.index]?.includes(match.index)) {
+        moved = caller;
         break;
       }
     }
-    if (moved !== undefined) {
+    if (moved !== undefined || (spec.kind === "action" && unmatched !== undefined)) {
       refused.set(name, {
         reason: "caller-moved",
-        detail: moved.matched
-          ? `Matched caller ${moved.index} no longer calls the function`
-          : `Reference caller ${moved.index} did not match uniquely`,
+        detail:
+          moved !== undefined
+            ? `Matched caller ${moved} no longer calls the function`
+            : `Reference caller ${unmatched} did not match uniquely`,
       });
       continue;
     }
@@ -105,7 +108,11 @@ export async function locate(
     }
     const fingerprint = next.values[match.index];
     if (fingerprint === undefined) throw new Error("Matched function has no fingerprint");
-    roles.set(name, { index: match.index, fingerprint });
+    roles.set(name, {
+      index: match.index,
+      fingerprint,
+      confidence: unmatched === undefined ? "proved" : "matched",
+    });
     roleValues.set(name, values);
   }
   // A refused caller also removes its dependents, including chains declared out of order.

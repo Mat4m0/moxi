@@ -3,6 +3,7 @@ import { type } from "arktype";
 const ordinal = type("number.integer >= 0");
 const role = type({
   "+": "reject",
+  kind: "'fact' | 'action'",
   signature: "string",
   "calledBy?": type({ "+": "reject", role: "string", call: ordinal }).array(),
   "reads?": type({
@@ -13,7 +14,14 @@ const specsType = type({ "[string]": role });
 const locatorType = type({
   "+": "reject",
   client: /^[a-f0-9]{64}$/,
-  roles: { "[string]": { "+": "reject", index: ordinal, fingerprint: "string > 0" } },
+  roles: {
+    "[string]": {
+      "+": "reject",
+      index: ordinal,
+      fingerprint: "string > 0",
+      confidence: "'proved' | 'matched'",
+    },
+  },
   values: { "[string]": "number" },
 });
 

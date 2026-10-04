@@ -1,140 +1,186 @@
 {
   ".hookFunction": {
+    "kind": "action",
     "signature": "i32->",
   },
   "playerSkillbarObservation.worldLifecycle.functionIndex": {
+    "kind": "fact",
     "signature": "i32->i32",
   },
   "playerSkillbarObservation.update.functionIndex": {
+    "kind": "fact",
     "signature": "->",
   },
   "playerSkillbarObservation.rowReader.functionIndex": {
+    "kind": "fact",
     "signature": "i32,i32,i32->i32",
   },
   "playerSkillbarObservation.slotReader.functionIndex": {
+    "kind": "fact",
     "signature": "i32,i32,i32->i32",
   },
   "cursorEvent.functionIndex": {
+    "kind": "action",
     "signature": "i32,i32,i32,i32,i32->",
   },
   "cursorEvent.producerFunctions[0]": {
+    "kind": "action",
     "signature": "i32,i32->i32",
   },
   "cursorEvent.producerFunctions[1]": {
+    "kind": "action",
     "signature": "i32,i32->i32",
   },
   "uiDispatcher.functionIndex": {
+    "kind": "action",
     "signature": "i32,i32,i32->",
   },
   "accessProof.readers.?.functionIndex[0]": {
+    "kind": "fact",
     "signature": "i32->i32",
   },
   "accessProof.readers.?.functionIndex[1]": {
+    "kind": "fact",
     "signature": "i32->i32",
   },
   "accessProof.readers.?.functionIndex[2]": {
+    "kind": "fact",
     "signature": "i32->i32",
   },
   "xunlaiAction.handler.functionIndex": {
+    "kind": "action",
     "signature": "i32->",
   },
   "travelAction.guildHall.keyAccessor.functionIndex": {
+    "kind": "fact",
     "signature": "->i32",
   },
   "travelAction.guildHall.areaTypeAccessor.functionIndex": {
+    "kind": "fact",
     "signature": "->i32",
   },
   "travelAction.guildHall.producer.functionIndex": {
+    "kind": "action",
     "signature": "i32,i32->",
   },
   "travelAction.unlockProof.accessor.functionIndex": {
+    "kind": "fact",
     "signature": "->i32",
   },
   "travelAction.unlockProof.consumer.functionIndex": {
+    "kind": "fact",
     "signature": "i32->i32",
   },
   "travelAction.producer.functionIndex": {
+    "kind": "action",
     "signature": "i32,i32->",
   },
   "travelAction.contextResolver.functionIndex": {
+    "kind": "action",
     "signature": "i32,i32,i32->",
   },
   "chatAliases.parser.functionIndex": {
+    "kind": "action",
     "signature": "i32,i32->i32",
   },
   "chatFiltering.producer.functionIndex": {
+    "kind": "action",
     "signature": "i32,i32->",
   },
   "gameThread.drain.functionIndex": {
+    "kind": "action",
     "signature": "i32,i32->",
   },
   "teamApply.professionTrace.sender.functionIndex": {
+    "kind": "action",
     "signature": "i32,i32,i32->",
   },
   "teamApply.entries.functionIndex": {
+    "kind": "action",
     "signature": "i32->",
   },
   "teamApply.label.functionIndex[0]": {
+    "kind": "action",
     "signature": "i32->",
   },
   "teamApply.label.functionIndex[1]": {
+    "kind": "action",
     "signature": "i32,i32->",
   },
   "teamApply.label.functionIndex[2]": {
+    "kind": "action",
     "signature": "i32,i32,i32->",
   },
   "teamApply.label.functionIndex[3]": {
+    "kind": "action",
     "signature": "i32,i32->",
   },
   "teamApply.label.functionIndex[4]": {
+    "kind": "action",
     "signature": "i32,i32,i32,i32->",
   },
   "teamApply.label.functionIndex[5]": {
+    "kind": "action",
     "signature": "i32->",
   },
   "skillSlotGeometry.initializer.functionIndex": {
+    "kind": "fact",
     "signature": "i32,i32->",
   },
   "skillSlotGeometry.constructor.functionIndex": {
+    "kind": "fact",
     "signature": "i32,i32,i32,i32,i32,i32->i32",
   },
   "preGameControls.characterSwitchAction.frameChild.functionIndex": {
+    "kind": "fact",
     "signature": "i32,i32->i32",
   },
   "preGameControls.characterSwitchAction.frameParent.functionIndex": {
+    "kind": "fact",
     "signature": "i32->i32",
   },
   "preGameControls.characterSwitchAction.frameResolver.functionIndex": {
+    "kind": "fact",
     "signature": "i32->i32",
   },
   "preGameControls.characterSwitchAction.frameDispatch.functionIndex": {
+    "kind": "action",
     "signature": "i32,i32,i32,i32->",
   },
   "preGameControls.characterSwitchAction.logoutProducer.functionIndex": {
+    "kind": "action",
     "signature": "i32,i32,i32->",
   },
   "preGameControls.hashFunction.functionIndex": {
+    "kind": "fact",
     "signature": "i32,i32->i32",
   },
   "quickItemMove.inventorySlot.functionIndex": {
+    "kind": "action",
     "signature": "i32,i32,i32->",
   },
   "quickItemMove.materialStorageSlot.functionIndex": {
+    "kind": "action",
     "signature": "i32,i32,i32->",
   },
   "quickItemMove.numberPreference.functionIndex": {
+    "kind": "fact",
     "signature": "i32->i32",
   },
   "quickItemMove.timer.functionIndex": {
+    "kind": "fact",
     "signature": "->i32",
   },
   "quickItemMove.moveItem.functionIndex": {
+    "kind": "action",
     "signature": "i32,i32,i32,i32->",
   },
   "skillCooldownObservation.reader.functionIndex": {
+    "kind": "fact",
     "signature": "i32,i32,i32->i32",
   },
   "skillCooldownObservation.timer.functionIndex": {
+    "kind": "fact",
     "signature": "->i32",
   },
 }
