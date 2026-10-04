@@ -19,6 +19,24 @@ export function mountGameFilesystem(
 ) {
   const dependency = "moxi-filesystem";
   module.addRunDependency(dependency);
+  function sync(populate: boolean, done: (error?: unknown) => void) {
+    let completed = false;
+    const finish = (error?: unknown) => {
+      if (completed) return;
+      completed = true;
+      clearTimeout(deadline);
+      done(error);
+    };
+    const deadline = setTimeout(
+      () => finish(new Error("Persistent filesystem sync timed out.")),
+      30_000,
+    );
+    try {
+      FS.syncfs(populate, finish);
+    } catch (error) {
+      finish(error);
+    }
+  }
   try {
     FS.mkdir("app:");
     FS.mount(IDBFS, { autoPersist: true }, "app:");
@@ -30,7 +48,7 @@ export function mountGameFilesystem(
     // /app:/app:/Gw.dat; the client then loops forever on the failed open.
     const isAbs = PATH.isAbs.bind(PATH);
     PATH.isAbs = (path) => path.startsWith("app:") || isAbs(path);
-    FS.syncfs(true, (restoreError) => {
+    sync(true, (restoreError) => {
       if (restoreError) {
         failed(restoreError);
         return;
@@ -39,7 +57,7 @@ export function mountGameFilesystem(
         FS.mkdirTree("app:/Templates/Skills");
         FS.mkdirTree("app:/Templates/Equipment");
         FS.chdir("app:");
-        FS.syncfs(false, (persistError) => {
+        sync(false, (persistError) => {
           if (persistError) failed(persistError);
           else {
             console.info("[moxi] persistent filesystem ready");

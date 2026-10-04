@@ -1,7 +1,10 @@
 import { afterEach, expect, test, vi } from "vite-plus/test";
 import { mountGameFilesystem, type GameFilesystem } from "./filesystem";
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 test.each(["restore", "persist", "success"])(
   "holds main until durable template directories exist (%s)",
@@ -100,3 +103,49 @@ test("client drive paths stay absolute after chdir instead of mounting or openin
     false,
   ]);
 });
+
+test.each([true, false])(
+  "a stalled sync (%s restore) fails at 30 seconds and late callbacks cannot start the game",
+  (populate) => {
+    vi.useFakeTimers();
+    let callback: (error?: unknown) => void = () => {};
+    const events: string[] = [];
+    vi.stubGlobal("FS", {
+      lookupPath() {},
+      mkdir() {},
+      mount() {},
+      mkdirTree() {
+        events.push("directory");
+      },
+      chdir() {
+        events.push("cwd");
+      },
+      syncfs(restoring: boolean, done: (error?: unknown) => void) {
+        if (restoring === populate) callback = done;
+        else done();
+      },
+    } satisfies GameFilesystem);
+    vi.stubGlobal("IDBFS", {});
+    vi.stubGlobal("PATH", { isAbs: (path: string) => path.startsWith("/") });
+    mountGameFilesystem(
+      {
+        addRunDependency() {},
+        removeRunDependency() {
+          events.push("ready");
+        },
+      },
+      (error) => {
+        events.push(error instanceof Error ? error.message : String(error));
+      },
+    );
+    events.length = 0;
+    vi.advanceTimersByTime(29_999);
+    expect(events).toEqual([]);
+    vi.advanceTimersByTime(1);
+    expect(events).toEqual(["Persistent filesystem sync timed out."]);
+    callback();
+    callback(new Error("late failure"));
+    vi.advanceTimersByTime(30_000);
+    expect(events).toEqual(["Persistent filesystem sync timed out."]);
+  },
+);
