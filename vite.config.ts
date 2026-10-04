@@ -52,7 +52,7 @@ export default defineConfig({
     options: { typeAware: true, typeCheck: true },
     rules: { "typescript/no-explicit-any": "error" },
     overrides: [
-      { files: ["packages/gwkit/**"], rules: imports([], ["contracts", "sdk", "ui"]) },
+      { files: ["packages/gwkit/**"], rules: imports(["arktype"], ["contracts", "sdk", "ui"]) },
       {
         files: ["packages/sdk/**"],
         rules: imports(["@vue/reactivity"], ["contracts", "gwkit", "ui"]),

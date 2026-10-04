@@ -64,7 +64,7 @@ Import rules (enforced by lint, not by tests):
 
 | Package | May import |
 | --- | --- |
-| `packages/gwkit` | nothing from this repo; no `electron`, no `vue` |
+| `packages/gwkit` | `arktype` only (for role specs and locator files); no `electron`, no `vue` |
 | `packages/sdk` | `@vue/reactivity` only |
 | `packages/contracts` | `arktype` only |
 | `packages/ui` | `vue`, `packages/sdk` types |
