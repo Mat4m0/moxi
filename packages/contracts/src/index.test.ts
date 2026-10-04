@@ -1,6 +1,15 @@
 import { expect, test } from "vite-plus/test";
 import { validateRequest, type WindowKind, type ChannelName } from "./index.js";
 const denied: [ChannelName, WindowKind | undefined, unknown][] = [
+  ["game.net.connect", "launcher", { id: 1, destination: "8.8.8.8:6112" }],
+  ["game.net.write", "pluginHost", { id: 1, bytes: new Uint8Array([1]) }],
+  ["game.net.close", "launcher", { id: 1 }],
+  ["game.net.ack", "pluginHost", { id: 1, bytes: 1 }],
+  ["game.dns", "launcher", "File1.ArenaNetworks.com"],
+  ["game.net.healthy", "pluginHost", "00000000-0000-4000-8000-000000000001"],
+  ["game.net.write", "game", { id: 1, bytes: [1, 2, 3] }],
+  ["game.net.ack", "game", { id: 1, bytes: 0 }],
+  ["game.net.connect", "game", { id: -1, destination: "8.8.8.8:6112" }],
   ["game.open", "game", undefined],
   ["app.info", "pluginHost", undefined],
   ["game.client", "launcher", undefined],
@@ -22,4 +31,10 @@ test.each([
   ["game.client", "game"],
 ] as const)("allows the window's declared actions (%s, %s)", (name, kind) => {
   expect(validateRequest(name, kind, undefined)).toBe(undefined);
+});
+
+test("accepts copied TCP bytes from the game window", () => {
+  expect(
+    validateRequest("game.net.write", "game", { id: 1, bytes: new Uint8Array([1, 2, 3]) }),
+  ).toEqual({ id: 1, bytes: new Uint8Array([1, 2, 3]) });
 });

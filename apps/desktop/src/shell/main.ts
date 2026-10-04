@@ -9,6 +9,7 @@ import { resolveRendererPath } from "../protocol-path.js";
 import { hubPortMessage } from "@moxi/contracts/windows";
 import type { WindowKind } from "@moxi/contracts";
 import { handle } from "./ipc.js";
+import { createGameNetwork } from "../game-network/index.js";
 import { createClientRoutes } from "./client.js";
 
 const repoRoot = resolve(import.meta.dirname, "../../..");
@@ -45,6 +46,14 @@ if (!app.isPackaged && process.env.MOXI_CDP_PORT) {
   writeFileSync(join(folders.data, "cdp.json"), JSON.stringify({ port }));
 }
 const windows = new Map<number, { kind: WindowKind; window: BrowserWindow }>();
+const network = createGameNetwork((owner, event) => {
+  const contents = windows.get(owner)?.window.webContents;
+  if (contents && !contents.isDestroyed()) contents.send("game.net.event", event);
+});
+const sessions = new Map<
+  number,
+  { client: ReturnType<typeof createClientRoutes>; token: string }
+>();
 let launcher: BrowserWindow | undefined;
 let game: BrowserWindow | undefined;
 let pluginHost: BrowserWindow;
@@ -97,6 +106,8 @@ function createWindow(kind: WindowKind) {
   windows.set(win.webContents.id, { kind, window: win });
   const id = win.webContents.id;
   win.on("closed", () => {
+    network.closeWindow(id);
+    sessions.delete(id);
     windows.delete(id);
     if (![...windows.values()].some((entry) => entry.kind !== "pluginHost")) app.quit();
   });
@@ -185,7 +196,45 @@ else {
         }
       });
       const windowKind = (id: number) => windows.get(id)?.kind;
-      handle("game.client", () => client.info(), windowKind);
+      handle(
+        "game.client",
+        async (_request, owner) => {
+          const routes = client;
+          const info = await routes.info();
+          if (windows.has(owner))
+            sessions.set(owner, { client: routes, token: info.generationToken });
+          return info;
+        },
+        windowKind,
+      );
+      handle(
+        "game.net.connect",
+        (request, owner) => network.connect(owner, request.id, request.destination),
+        windowKind,
+      );
+      handle(
+        "game.net.write",
+        (request, owner) => network.write(owner, request.id, request.bytes),
+        windowKind,
+      );
+      handle("game.net.close", (request, owner) => network.close(owner, request.id), windowKind);
+      handle(
+        "game.net.ack",
+        (request, owner) => network.ack(owner, request.id, request.bytes),
+        windowKind,
+      );
+      handle("game.dns", (name) => network.resolve(name), windowKind);
+      handle(
+        "game.net.healthy",
+        async (token, owner) => {
+          const session = sessions.get(owner);
+          if (!session || session.token !== token || !network.hasConnected(owner))
+            throw new Error("Game session is not connected.");
+          await session.client.confirmHealthy(token);
+          return undefined;
+        },
+        windowKind,
+      );
       handle(
         "app.info",
         () => ({

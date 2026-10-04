@@ -10,7 +10,27 @@ export function defineChannel<Req, Res>(spec: {
 }): Channel<Req, Res> {
   return spec;
 }
+export const socketEvent = type({ id: "number.safe >= 0", kind: "'open' | 'close'" }).or(
+  type({ id: "number.safe >= 0", kind: "'data'", bytes: type.instanceOf(Uint8Array) }),
+);
+export type SocketEvent = typeof socketEvent.infer;
+const socketId = type({ id: "number.safe >= 0" });
 export const channels = {
+  "game.net.connect": defineChannel({
+    request: type({ id: "number.safe >= 0", destination: "string <= 256" }),
+    response: type("undefined"),
+  }),
+  "game.net.write": defineChannel({
+    request: type({ id: "number.safe >= 0", bytes: type.instanceOf(Uint8Array) }),
+    response: type("undefined"),
+  }),
+  "game.net.close": defineChannel({ request: socketId, response: type("undefined") }),
+  "game.net.ack": defineChannel({
+    request: type({ id: "number.safe >= 0", bytes: "number.safe > 0" }),
+    response: type("undefined"),
+  }),
+  "game.dns": defineChannel({ request: type("string <= 253"), response: type("string") }),
+  "game.net.healthy": defineChannel({ request: type("string.uuid"), response: type("undefined") }),
   "app.info": defineChannel({
     request: type("undefined"),
     response: type({
@@ -35,7 +55,7 @@ export type Bridge<K extends WindowKind> = {
     name: N,
     request: RequestOf<N>,
   ): Promise<ResponseOf<N>>;
-};
+} & (K extends "game" ? { onSocketEvent(listener: (event: SocketEvent) => void): () => void } : {});
 export function validateRequest(name: ChannelName, kind: WindowKind | undefined, input: unknown) {
   if (!kind || !windowChannels[kind].some((allowed) => allowed === name))
     throw new Error("This window cannot use that action.");

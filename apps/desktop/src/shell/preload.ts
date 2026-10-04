@@ -1,8 +1,17 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 import { hubPortMessage, windowChannels, type WindowKind } from "@moxi/contracts/windows";
-import type { ChannelName } from "@moxi/contracts";
+import type { ChannelName, SocketEvent } from "@moxi/contracts";
 export function exposeBridge(kind: WindowKind) {
   contextBridge.exposeInMainWorld("moxi", {
+    ...(kind === "game"
+      ? {
+          onSocketEvent(listener: (event: SocketEvent) => void) {
+            const receive = (_event: IpcRendererEvent, message: SocketEvent) => listener(message);
+            ipcRenderer.on("game.net.event", receive);
+            return () => ipcRenderer.removeListener("game.net.event", receive);
+          },
+        }
+      : {}),
     invoke(name: ChannelName, request: unknown): Promise<unknown> {
       if (!windowChannels[kind].some((allowed) => allowed === name))
         return Promise.reject(new Error("This window cannot use that action."));

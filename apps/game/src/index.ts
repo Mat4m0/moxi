@@ -2,6 +2,7 @@ import "./hub/main.ts";
 import type { Bridge } from "@moxi/contracts";
 import { createRuntime } from "@moxi/gwkit";
 import { mountGameFilesystem } from "./filesystem";
+import { createSocketHost } from "./socket-host";
 import { createImage } from "./image";
 
 type GameModule = {
@@ -17,15 +18,7 @@ type GameModule = {
   onAbort(reason: unknown): void;
   onRuntimeInitialized(): void;
   image: ReturnType<typeof createImage>;
-  socket: {
-    connect(destination: string): {
-      onopen: (() => void) | null;
-      onclose: (() => void) | null;
-      onmessage: ((bytes: Uint8Array) => void) | null;
-      send(): void;
-      close(): void;
-    };
-  };
+  socket: ReturnType<typeof createSocketHost>["socket"];
   dns: { resolve(name: string): Promise<string> };
   getPatchMode(): Promise<string>;
   handleFatalReadError(): void;
@@ -47,6 +40,7 @@ if (!element || !(status instanceof HTMLElement)) throw new Error("The game canv
 const canvas = element;
 const message = status;
 let runtime: ReturnType<typeof createRuntime> | undefined;
+let network: ReturnType<typeof createSocketHost> | undefined;
 let frameLog: ReturnType<typeof setInterval> | undefined;
 function fail(text: string) {
   message.hidden = false;
@@ -58,6 +52,18 @@ async function boot() {
   const client = await window.moxi.invoke("game.client", undefined);
   const game = createRuntime();
   runtime = game;
+  let confirmed = false;
+  network = createSocketHost(
+    window.moxi,
+    (callback) => game.onSafePoint(callback),
+    () => {
+      if (confirmed) return;
+      confirmed = true;
+      void window.moxi
+        .invoke("game.net.healthy", client.generationToken)
+        .catch(() => console.warn("[moxi] Client health could not be confirmed."));
+    },
+  );
   globalThis.Module = {
     canvas,
     preRun() {
@@ -79,35 +85,8 @@ async function boot() {
       canvas.focus();
     },
     image: createImage(client.snapshotSize, () => game.memory()),
-    socket: {
-      connect(destination) {
-        console.info(`[moxi] connection failed (F2 unavailable): ${destination}`);
-        message.hidden = false;
-        message.textContent = "Could not connect to the game servers. Restart Moxi to try again.";
-        let closed = false;
-        const socket: ReturnType<GameModule["socket"]["connect"]> = {
-          onopen: null,
-          onclose: null,
-          onmessage: null,
-          send() {},
-          close() {
-            if (!closed) {
-              closed = true;
-              socket.onclose?.();
-            }
-          },
-        };
-        queueMicrotask(() => socket.close());
-        return socket;
-      },
-    },
-    dns: {
-      async resolve(name) {
-        console.info(`[moxi] DNS unavailable (F2): ${name}`);
-        // A sentinel reaches the client's connection-failure path without a DNS lookup.
-        return "192.0.2.1";
-      },
-    },
+    socket: network.socket,
+    dns: { resolve: (name) => window.moxi.invoke("game.dns", name) },
     async getPatchMode() {
       return "onDemand";
     },
@@ -136,6 +115,7 @@ window.addEventListener(
   "pagehide",
   () => {
     clearInterval(frameLog);
+    network?.dispose();
     runtime?.dispose();
   },
   { once: true },

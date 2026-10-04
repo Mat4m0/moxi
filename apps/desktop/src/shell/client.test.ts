@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, test } from "vite-plus/test";
@@ -94,4 +94,16 @@ test("does not expose arbitrary cache files through the client protocol", async 
   for (const path of ["manifest.json", "generations.json", "%2e%2e%2fmanifest.json"]) {
     expect((await routes.handle(new Request(`moxi://app/client/${path}`)))?.status).toBe(404);
   }
+});
+
+test("confirms only the session generation and promotes its verified client", async () => {
+  const routes = await cache();
+  await routes.info();
+  await expect(routes.confirmHealthy(second)).rejects.toThrow("Stale client generation token.");
+  await routes.confirmHealthy(first);
+  expect(JSON.parse(await readFile(join(dir, "generations.json"), "utf8"))).toEqual({
+    active: first,
+    candidate: null,
+    previous: null,
+  });
 });

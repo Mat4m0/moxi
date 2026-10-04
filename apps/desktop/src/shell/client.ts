@@ -32,6 +32,11 @@ export function createClientRoutes(dir: string, fetchResponse: typeof fetch = fe
   let client: ReturnType<typeof openClient> | undefined;
   const current = () => (client ??= openClient());
   return {
+    async confirmHealthy(token: string) {
+      if (token !== (await current()).generationToken)
+        throw new Error("Stale client generation token.");
+      await cache.confirmHealthy(token);
+    },
     async info() {
       const { generationToken, snapshot } = await current();
       return { generationToken, snapshotSize: snapshot.size };
