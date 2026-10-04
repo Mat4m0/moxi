@@ -42,3 +42,29 @@ test.each([
     expect(Array.from(memory)).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
   },
 );
+
+test("reports a range as cached only after it was fetched, across adjacent fetches", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>(async (_url, init) => {
+      const [, start, end] = /bytes=(\d+)-(\d+)/.exec(
+        String(new Headers(init?.headers).get("Range")),
+      )!;
+      return new Response(new Uint8Array(Number(end) - Number(start) + 1), { status: 206 });
+    }),
+  );
+  const image = createImage(100, () => new Uint8Array(0));
+  const handle = image.open("Gw.snapshot");
+  const cached = () =>
+    [
+      [0, 10],
+      [10, 10],
+      [0, 20],
+      [5, 20],
+      [40, 1],
+    ].map(([offset, length]) => image.isCached(handle, offset!, length!));
+  expect(cached()).toEqual([0, 0, 0, 0, 0]);
+  await image.cacheAsync(handle, 0, 10, () => {});
+  await image.cacheAsync(handle, 10, 20, () => {});
+  expect(cached()).toEqual([1, 1, 1, 1, 0]);
+});
