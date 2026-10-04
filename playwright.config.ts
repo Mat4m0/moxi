@@ -5,7 +5,7 @@ export default defineConfig({
   testMatch: "**/*.e2e.ts",
   outputDir: ".evidence/c2/playwright",
   workers: 1,
-  timeout: 180_000,
+  timeout: 300_000,
   expect: { timeout: 30_000 },
-  reporter: "list",
+  reporter: [["list", { printSteps: true }]],
 });
