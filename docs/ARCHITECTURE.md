@@ -41,7 +41,8 @@ Main (Node, apps/desktop)
 - Renderers run with `contextIsolation`, `sandbox: true`, no Node. Each window
   kind gets one preload that exposes only its channels.
 - No plugin code runs in a game renderer. The plugin host talks to each game
-  renderer over a `MessagePort` that Main hands out.
+  renderer over a `MessagePort` that Main hands out. Its messages are defined
+  once in `@moxi/sdk/host`, which both renderers may import.
 
 ## Packages
 
