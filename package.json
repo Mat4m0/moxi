@@ -9,10 +9,15 @@
     "ui": "vp dev --config packages/ui/vite.config.ts",
     "dev": "node scripts/dev.ts",
     "build": "pnpm --filter @moxi/launcher exec vp build && pnpm --filter @moxi/game exec vp build && pnpm --filter @moxi/plugin-host exec vp build && pnpm --filter @moxi/desktop exec vp pack",
-    "fetch-client": "node scripts/fetch-client.ts"
+    "fetch-client": "node scripts/fetch-client.ts",
+    "drive": "node scripts/drive.ts",
+    "e2e": "pnpm build && playwright test"
   },
   "devDependencies": {
     "@moxi/desktop": "workspace:*",
+    "@playwright/test": "1.63.0",
+    "@types/node": "24.19.1",
+    "electron": "44.5.1",
     "typescript": "5.9.3",
     "vite-plus": "1.0.0"
   },
