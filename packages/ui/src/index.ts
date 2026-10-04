@@ -1,4 +1,4 @@
-export { appearanceVariables, defaultCustomUiTheme } from "./appearance";
+export { appearanceVariables, applyAppearance, defaultCustomUiTheme } from "./appearance";
 export type { AppearanceSettings, CustomUiTheme, UiColor, UiFont } from "./appearance";
 export {
   accessibleForeground,

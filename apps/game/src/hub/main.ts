@@ -1,33 +1,18 @@
 import { createApp } from "vue";
-import { appearanceVariables, type AppearanceSettings } from "@moxi/ui";
+import { applyAppearance } from "@moxi/ui";
 import { hubPortMessage } from "@moxi/contracts";
 import type { HostToHub } from "@moxi/sdk/host";
 import { connectHub, publishFacts } from "./client.ts";
 import App from "./App.vue";
-let appliedVariables: string[] = [];
-function applyAppearance(settings: AppearanceSettings) {
-  const root = document.documentElement;
-  for (const key of appliedVariables) root.style.removeProperty(key);
-  const variables = appearanceVariables(settings);
-  appliedVariables = Object.keys(variables);
-  for (const [key, value] of Object.entries(variables)) root.style.setProperty(key, value);
-  root.dataset.uiStyle =
-    settings.uiStyle === "custom"
-      ? settings.uiCustomTheme?.material === "modern"
-        ? "obsidian"
-        : "classic"
-      : settings.uiStyle;
-  root.dataset.uiFont = settings.uiFont;
-}
 let appearanceChanged = false;
 const unsubscribeAppearance = window.moxi.onAppearanceChanged((settings) => {
   appearanceChanged = true;
-  applyAppearance(settings);
+  applyAppearance(document.documentElement, settings);
 });
 void window.moxi
   .invoke("appearance.get", undefined)
   .then((settings) => {
-    if (!appearanceChanged) applyAppearance(settings);
+    if (!appearanceChanged) applyAppearance(document.documentElement, settings);
   })
   .catch(() => {});
 window.addEventListener("pagehide", unsubscribeAppearance, { once: true });

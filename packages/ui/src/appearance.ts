@@ -158,3 +158,19 @@ export function appearanceVariables(
   }
   return variables;
 }
+
+const applied = new WeakMap<HTMLElement, string[]>();
+// Applies settings to a document root, replacing whatever an earlier call set.
+export function applyAppearance(root: HTMLElement, settings: AppearanceSettings) {
+  for (const key of applied.get(root) ?? []) root.style.removeProperty(key);
+  const variables = appearanceVariables(settings);
+  applied.set(root, Object.keys(variables));
+  for (const [key, value] of Object.entries(variables)) root.style.setProperty(key, value);
+  root.dataset.uiStyle =
+    settings.uiStyle === "custom"
+      ? settings.uiCustomTheme?.material === "modern"
+        ? "obsidian"
+        : "classic"
+      : settings.uiStyle;
+  root.dataset.uiFont = settings.uiFont;
+}
