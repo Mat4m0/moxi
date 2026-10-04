@@ -52,12 +52,17 @@ export const clientReadiness = type({
   state: "'playable'",
   backgroundDownload: download.or("null"),
 })
-  .or({ state: "'offline-playable'" })
+  .or({
+    state: "'offline-playable'",
+    "gameFilesInfo?": type({ bytes: "number.safe >= 0", totalBytes: "number.safe >= 0" }),
+  })
   .or({ state: "'repair-required'" })
   .or({ state: "'preparing'", progress: download });
 export type Readiness = typeof clientReadiness.infer;
 export type Download = typeof download.infer;
 export const channels = {
+  "download.pause": defineChannel({ request: type("undefined"), response: type("undefined") }),
+  "download.resume": defineChannel({ request: type("undefined"), response: type("undefined") }),
   "client.readiness": defineChannel({ request: type("undefined"), response: clientReadiness }),
   "client.retry": defineChannel({ request: type("undefined"), response: type("undefined") }),
   "appearance.get": defineChannel({ request: type("undefined"), response: appearanceSettings }),

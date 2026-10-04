@@ -81,8 +81,12 @@ const patchFetch: typeof fetch = patchRoot
     }
   : fetch;
 const cacheClient = createClientCache(folders.gameCache, patchFetch);
+let client = createClientRoutes(folders.gameCache, patchFetch, cacheClient);
 const readiness = createClientReadiness({
   prepare: cacheClient.prepare,
+  observe: (progress) =>
+    createClientRoutes(folders.gameCache, patchFetch, cacheClient).observe(progress),
+  fill: (options) => createClientRoutes(folders.gameCache, patchFetch, cacheClient).fill(options),
   state: cacheClient.state,
   now: Date.now,
   log: (error) =>
@@ -96,7 +100,6 @@ const readiness = createClientReadiness({
         window.webContents.send("client.readiness.changed", value);
   },
 });
-let client = createClientRoutes(folders.gameCache, patchFetch);
 const csp =
   "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; worker-src 'self' blob:; connect-src 'self'";
 // electron-builder.config.ts copies each renderer's dist to renderers/<name>.
@@ -108,7 +111,7 @@ const roots = {
   "plugin-host": rendererRoot("plugin-host"),
 };
 function createWindow(kind: WindowKind) {
-  if (kind === "game") client = createClientRoutes(folders.gameCache, patchFetch);
+  if (kind === "game") client = createClientRoutes(folders.gameCache, patchFetch, cacheClient);
   const win = new BrowserWindow({
     width: 960,
     height: 640,
@@ -303,6 +306,22 @@ else {
           version: app.getVersion(),
           channel: identity.channel,
         }),
+        windowKind,
+      );
+      handle(
+        "download.pause",
+        () => {
+          readiness.pause();
+          return undefined;
+        },
+        windowKind,
+      );
+      handle(
+        "download.resume",
+        () => {
+          readiness.resume();
+          return undefined;
+        },
         windowKind,
       );
       handle("client.readiness", () => readiness.current(), windowKind);

@@ -15,7 +15,8 @@ let active = 0;
 const waiting: Array<() => void> = [];
 
 export function createPatchTransport(fetchResponse: typeof fetch = fetch) {
-  return async (url: string, maxBytes: number): Promise<Uint8Array> => {
+  return async (url: string, maxBytes: number, signal?: AbortSignal): Promise<Uint8Array> => {
+    signal?.throwIfAborted();
     const address = new URL(url);
     if (
       address.origin !== PATCH_ROOT ||
@@ -38,7 +39,7 @@ export function createPatchTransport(fetchResponse: typeof fetch = fetch) {
           const response = await fetchResponse(url, {
             headers,
             redirect: "manual",
-            signal: controller.signal,
+            signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal,
           });
           if (response.status !== 200) {
             await response.body?.cancel();
@@ -73,6 +74,7 @@ export function createPatchTransport(fetchResponse: typeof fetch = fetch) {
           }
           return Buffer.concat(chunks, size);
         } catch (error) {
+          signal?.throwIfAborted();
           if (error instanceof RefusedResponse) throw error;
           if (attempt === 3)
             throw new PatchNetworkError(
@@ -83,7 +85,20 @@ export function createPatchTransport(fetchResponse: typeof fetch = fetch) {
           clearTimeout(timer);
           controller.abort();
         }
-        await new Promise<void>((resolve) => setTimeout(resolve, 1000 * 2 ** attempt));
+        await new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(
+            () => {
+              signal?.removeEventListener("abort", abort);
+              resolve();
+            },
+            1000 * 2 ** attempt,
+          );
+          function abort() {
+            clearTimeout(timer);
+            reject(signal?.reason);
+          }
+          signal?.addEventListener("abort", abort, { once: true });
+        });
       }
     } finally {
       const next = waiting.shift();

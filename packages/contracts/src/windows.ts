@@ -1,5 +1,7 @@
 export const windowChannels = {
   launcher: [
+    "download.pause",
+    "download.resume",
     "client.readiness",
     "client.retry",
     "appearance.get",

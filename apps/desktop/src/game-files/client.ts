@@ -2,9 +2,11 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdir, open, readFile, readdir, rename, rm, rmdir, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { GameFileError } from "./errors.ts";
-import { verify } from "./chunks.ts";
+import { decode, verify } from "./chunks.ts";
 import { confirmHealthy, parseGenerations, stageCandidate } from "./generations.ts";
 import type { Generations } from "./generations.ts";
+import type { Compression } from "./chunks.ts";
+import type { Manifest } from "./manifest.ts";
 import { parseManifest } from "./manifest.ts";
 import { createChunkStore } from "./store.ts";
 import { createPatchTransport, PATCH_ROOT } from "./transport.ts";
@@ -34,6 +36,23 @@ async function writeSynced(path: string, bytes: Uint8Array) {
 
 export function createClientCache(dir: string, fetchResponse: typeof fetch = fetch) {
   const request = createPatchTransport(fetchResponse);
+  let store: ReturnType<typeof createChunkStore> | undefined;
+  let compression: Compression = "none";
+  function chunks(manifest: Manifest) {
+    compression = manifest.compression;
+    return (store ??= createChunkStore({
+      dir: join(dir, "chunks"),
+      fetchChunk: async (hash, length, signal) => {
+        const mode = compression;
+        const bytes = await request(
+          `${PATCH_ROOT}/${hash}.bin`,
+          mode === "none" ? length : length + Math.max(65536, Math.ceil(length / 16)),
+          signal,
+        );
+        return decode(bytes, mode, length);
+      },
+    }));
+  }
   const generationsDir = join(dir, "generations");
   const statePath = join(dir, "generations.json");
   async function state(): Promise<Generations> {
@@ -147,6 +166,7 @@ export function createClientCache(dir: string, fetchResponse: typeof fetch = fet
     return { generationToken, hashes, totalBytes };
   }
   return {
+    chunks,
     state,
     directory: (generationToken: string) => {
       stageCandidate({ active: null, candidate: null, previous: null }, generationToken);
@@ -161,17 +181,7 @@ export function createClientCache(dir: string, fetchResponse: typeof fetch = fet
           .reduce((sum, file) => sum + file.size, 0);
         let received = 0;
         progress?.(0, total);
-        const store = createChunkStore({
-          dir: join(dir, "chunks"),
-          compression: manifest.compression,
-          fetchChunk: (hash, length) =>
-            request(
-              `${PATCH_ROOT}/${hash}.bin`,
-              manifest.compression === "none"
-                ? length
-                : length + Math.max(65536, Math.ceil(length / 16)),
-            ),
-        });
+        const store = chunks(manifest);
         const old = await state();
         const existing = old.candidate ?? old.active;
         if (existing) {

@@ -112,3 +112,143 @@ test("limits progress to four events per second and drops old speed samples", as
   ).toEqual([250, 500, 750, 1000, 1250, 1500, 1750, 2000, 6000]);
   expect(readiness.current()).toEqual({ state: "playable", backgroundDownload: null });
 });
+
+test("pause keeps Play available and an immediate resume waits for the aborted fill", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(0);
+  const events: Readiness[] = [];
+  let calls = 0;
+  let resumed!: () => void;
+  const resumedFill = new Promise<void>((resolve) => {
+    resumed = resolve;
+  });
+  const readiness = createClientReadiness({
+    prepare: async () => {},
+    state: async () => ({ active: null, candidate: "candidate" }),
+    fill: async ({ signal, onProgress }) => {
+      calls++;
+      onProgress(4, 20);
+      if (calls === 1) {
+        await new Promise<void>((_resolve, reject) =>
+          signal.addEventListener("abort", () => reject(signal.reason), { once: true }),
+        );
+      } else {
+        vi.setSystemTime(1000);
+        onProgress(12, 20);
+        expect(readiness.current()).toEqual({
+          state: "playable",
+          backgroundDownload: {
+            status: "running",
+            received: 12,
+            total: 20,
+            bytesPerSecond: 8,
+            secondsRemaining: 1,
+          },
+        });
+        onProgress(20, 20);
+        resumed();
+      }
+    },
+    changed: (value) => events.push(value),
+    now: Date.now,
+    log: () => {},
+  });
+  await readiness.retry();
+  readiness.pause();
+  expect(readiness.current()).toEqual({
+    state: "playable",
+    backgroundDownload: {
+      status: "paused",
+      received: 4,
+      total: 20,
+      bytesPerSecond: null,
+      secondsRemaining: null,
+    },
+  });
+  expect(() => readiness.assertPlayable()).not.toThrow();
+  readiness.resume();
+  await resumedFill;
+  expect(calls).toBe(2);
+  expect(readiness.current()).toEqual({
+    state: "playable",
+    backgroundDownload: {
+      status: "complete",
+      received: 20,
+      total: 20,
+      bytesPerSecond: 16,
+      secondsRemaining: 0,
+    },
+  });
+});
+
+test("paused client reads publish their final resident bytes even inside the throttle interval", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(1000);
+  let progress!: (bytes: number, total: number) => void;
+  const events: Readiness[] = [];
+  const readiness = createClientReadiness({
+    prepare: async () => {},
+    state: async () => ({ active: null, candidate: "candidate" }),
+    observe: async (listener) => {
+      progress = listener;
+      return () => {};
+    },
+    fill: async ({ signal, onProgress }) => {
+      onProgress(4, 20);
+      await new Promise<void>((_resolve, reject) =>
+        signal.addEventListener("abort", () => reject(signal.reason), { once: true }),
+      );
+    },
+    changed: (value) => events.push(value),
+    now: Date.now,
+    log: () => {},
+  });
+  await readiness.retry();
+  readiness.pause();
+  const count = events.length;
+  progress(8, 20);
+  progress(12, 20);
+  await vi.advanceTimersByTimeAsync(249);
+  expect(events).toHaveLength(count);
+  await vi.advanceTimersByTimeAsync(1);
+  expect(events).toHaveLength(count + 1);
+  expect(events.at(-1)).toEqual({
+    state: "playable",
+    backgroundDownload: {
+      status: "paused",
+      received: 12,
+      total: 20,
+      bytesPerSecond: null,
+      secondsRemaining: null,
+    },
+  });
+});
+
+test("an offline usable cache reports resident snapshot bytes without starting a fill", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(1000);
+  const events: Readiness[] = [];
+  const fill = vi.fn(async () => {});
+  const readiness = createClientReadiness({
+    prepare: async () => {
+      throw new PatchNetworkError("offline");
+    },
+    state: async () => ({ active: "active", candidate: null }),
+    observe: async (progress) => {
+      progress(12, 20);
+      return () => {};
+    },
+    fill,
+    changed: (value) => events.push(value),
+    now: Date.now,
+    log: () => {},
+  });
+  await readiness.retry();
+  await vi.runAllTimersAsync();
+  expect(events.at(-1)).toEqual({
+    state: "offline-playable",
+    gameFilesInfo: { bytes: 12, totalBytes: 20 },
+  });
+  expect(() => readiness.assertPlayable()).not.toThrow();
+  expect(fill).not.toHaveBeenCalled();
+});

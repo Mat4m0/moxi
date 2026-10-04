@@ -1,6 +1,12 @@
 import { expect, test } from "vite-plus/test";
 import { validateRequest, type WindowKind, type ChannelName } from "./index.js";
 const denied: [ChannelName, WindowKind | undefined, unknown][] = [
+  ["download.pause", "game", undefined],
+  ["download.pause", "pluginHost", undefined],
+  ["download.resume", "game", undefined],
+  ["download.resume", "pluginHost", undefined],
+  ["download.pause", "launcher", {}],
+  ["download.resume", "launcher", {}],
   ["client.readiness", "game", undefined],
   ["client.readiness", "pluginHost", undefined],
   ["client.retry", "game", undefined],
@@ -36,6 +42,8 @@ test.each(denied)(
   },
 );
 test.each([
+  ["download.pause", "launcher"],
+  ["download.resume", "launcher"],
   ["app.info", "launcher"],
   ["game.open", "launcher"],
   ["app.info", "game"],

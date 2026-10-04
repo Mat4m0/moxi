@@ -97,7 +97,6 @@ export function fixtureData(search = ""): LauncherData {
     profiles: [main, storage],
     // fixture until accounts slice
     selectedProfileIds: ["main"],
-    // fixture until game-files slice
     readiness: {
       state: "playable",
       backgroundDownload: {
@@ -110,7 +109,6 @@ export function fixtureData(search = ""): LauncherData {
     },
     // fixture until updates slice
     appUpdate: { phase: "idle", currentVersion: "2026.8.10" },
-    // fixture until game-files slice
     gameFilesInfo: { bytes: 8_400_000_000, totalBytes: 9_100_000_000 },
     // fixture until appearance and updates slices
     settings: {
@@ -351,16 +349,42 @@ export function fixtureData(search = ""): LauncherData {
 
 export function bridgeData(): LauncherData {
   const data = fixtureData();
+  data.state.value = {
+    ...data.state.value,
+    readiness: {
+      state: "preparing",
+      progress: {
+        status: "running",
+        received: 0,
+        total: 0,
+        bytesPerSecond: null,
+        secondsRemaining: null,
+      },
+    },
+    gameFilesInfo: { bytes: 0, totalBytes: 0 },
+  };
+  function applyReadiness(readiness: Readiness) {
+    const progress = readiness.state === "playable" ? readiness.backgroundDownload : null;
+    data.state.value = {
+      ...data.state.value,
+      readiness,
+      gameFilesInfo: progress
+        ? { bytes: progress.received, totalBytes: progress.total }
+        : readiness.state === "offline-playable" && readiness.gameFilesInfo
+          ? readiness.gameFilesInfo
+          : data.state.value.gameFilesInfo,
+    };
+  }
   return {
     ...data,
     async initialize() {
       let changed = false;
       window.moxi.onReadinessChanged((readiness) => {
         changed = true;
-        data.state.value = { ...data.state.value, readiness };
+        applyReadiness(readiness);
       });
       const readiness = await window.moxi.invoke("client.readiness", undefined);
-      if (!changed) data.state.value = { ...data.state.value, readiness };
+      if (!changed) applyReadiness(readiness);
       const info = await window.moxi.invoke("app.info", undefined);
       const appearance = await window.moxi.invoke("appearance.get", undefined);
       data.state.value = {
@@ -383,6 +407,11 @@ export function bridgeData(): LauncherData {
       data.state.value = { ...data.state.value, settings };
     },
     download(action) {
+      if (action === "pause" || action === "resume")
+        void window.moxi.invoke(
+          action === "pause" ? "download.pause" : "download.resume",
+          undefined,
+        );
       if (action === "repair" || action === "reset")
         void window.moxi.invoke("client.retry", undefined);
     },

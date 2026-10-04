@@ -1,16 +1,13 @@
 import { open, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Readable } from "node:stream";
-import {
-  createClientCache,
-  createChunkStore,
-  createPatchTransport,
-  parseManifest,
-  PATCH_ROOT,
-} from "../game-files/index.ts";
+import { createClientCache, parseManifest } from "../game-files/index.ts";
 
-export function createClientRoutes(dir: string, fetchResponse: typeof fetch = fetch) {
-  const cache = createClientCache(dir, fetchResponse);
+export function createClientRoutes(
+  dir: string,
+  fetchResponse: typeof fetch = fetch,
+  cache = createClientCache(dir, fetchResponse),
+) {
   async function openClient() {
     const state = await cache.state();
     // The first install has only a candidate; F2 must confirm a connection before promotion.
@@ -20,18 +17,25 @@ export function createClientRoutes(dir: string, fetchResponse: typeof fetch = fe
     const manifest = parseManifest(await readFile(join(directory, "manifest.json")));
     const snapshot = [...manifest.files.values()].find((file) => file.name === "Gw.snapshot");
     if (!snapshot) throw new Error("The game snapshot is unavailable.");
-    const request = createPatchTransport(fetchResponse);
-    const store = createChunkStore({
-      dir: join(dir, "chunks"),
-      compression: manifest.compression,
-      fetchChunk: (hash, length) =>
-        request(`${PATCH_ROOT}/${hash}.bin`, length + Math.max(65536, Math.ceil(length / 16))),
-    });
+    const store = cache.chunks(manifest);
     return { directory, generationToken, snapshot, store };
   }
   let client: ReturnType<typeof openClient> | undefined;
   const current = () => (client ??= openClient());
   return {
+    async observe(progress: (bytes: number, total: number) => void) {
+      const { store, snapshot } = await current();
+      const report = () => {
+        void store.residency(snapshot).then(({ bytes, totalBytes }) => progress(bytes, totalBytes));
+      };
+      const unsubscribe = store.subscribe(report);
+      report();
+      return unsubscribe;
+    },
+    async fill(options: { signal: AbortSignal; onProgress(bytes: number, total: number): void }) {
+      const { store, snapshot } = await current();
+      return store.fill(snapshot, options);
+    },
     async confirmHealthy(token: string, connected: boolean) {
       if (!connected) throw new Error("Game session is not connected.");
       if (token !== (await current()).generationToken)
