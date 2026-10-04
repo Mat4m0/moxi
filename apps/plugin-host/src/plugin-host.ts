@@ -52,9 +52,6 @@ export class PluginHost {
     port.listen((message) => {
       if (this.disposed) return;
       switch (message.t) {
-        case "dispose":
-          this.dispose();
-          break;
         case "openHub":
           this.hubOpen = true;
           this.hubSession++;

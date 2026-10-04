@@ -30,7 +30,6 @@ export type HubState = {
   gameActions: string[];
 };
 export type HubToHost =
-  | { t: "dispose" }
   | { t: "openHub" }
   | { t: "closeHub" }
   | { t: "query"; text: string; scope: string | null }

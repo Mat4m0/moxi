@@ -33,7 +33,7 @@ Main (Node, apps/desktop)
    │        ▲ facts out, UI trees in (MessagePort, direct)
    │        ▼
    └── Plugin host renderer (apps/plugin-host, hidden, one per app)
-            one module Worker per enabled plugin
+            one module Worker per enabled plugin and game window
 ```
 
 - Main is the only process with Node and the only owner of disk, network
@@ -153,7 +153,8 @@ See `packages/sdk/README.md` for the contract. The host rules:
 - A plugin is a manifest (`plugin.json`) plus one ES module. The host reads the
   manifest without running code; commands, scopes and settings are visible
   before the plugin starts.
-- Each enabled plugin runs in its own module Worker in the plugin host. Its
+- Each enabled plugin runs in its own module Worker in the plugin host, one per
+  game window, so account-scoped state never mixes. Its
   render functions return UI nodes; the host renders them. Plugins never touch
   the DOM, Node, game memory, input or the network outside declared hosts.
 - Facts are pushed per permission at 10–20 Hz. A game action needs the

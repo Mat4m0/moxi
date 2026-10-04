@@ -70,10 +70,7 @@ window.addEventListener("message", (event: MessageEvent) => {
     localStorage,
   );
   sessions.set(id, { host, port });
-  port.addEventListener("close", () => {
-    host.dispose();
-    sessions.delete(id);
-  });
+  port.addEventListener("close", () => sessions.delete(id));
   void plugins
     .then((entries) => {
       if (sessions.get(id)?.host !== host) return;
