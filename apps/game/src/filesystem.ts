@@ -10,6 +10,7 @@ export interface GameFilesystem {
 declare global {
   var FS: GameFilesystem;
   var IDBFS: unknown;
+  var PATH: { isAbs(path: string): boolean };
 }
 
 export function mountGameFilesystem(
@@ -25,6 +26,10 @@ export function mountGameFilesystem(
     const lookupPath = FS.lookupPath.bind(FS);
     FS.lookupPath = (path, options) =>
       lookupPath(path.startsWith("app:") ? `/${path}` : path, options);
+    // Syscalls prepend the cwd to relative paths, so app:/Gw.dat would become
+    // /app:/app:/Gw.dat; the client then loops forever on the failed open.
+    const isAbs = PATH.isAbs.bind(PATH);
+    PATH.isAbs = (path) => path.startsWith("app:") || isAbs(path);
     FS.syncfs(true, (restoreError) => {
       if (restoreError) {
         failed(restoreError);

@@ -35,6 +35,7 @@ test.each(["restore", "persist", "success"])(
     };
     vi.stubGlobal("FS", fs);
     vi.stubGlobal("IDBFS", {});
+    vi.stubGlobal("PATH", { isAbs: (path: string) => path.startsWith("/") });
     mountGameFilesystem(
       {
         addRunDependency: (name) => {
@@ -85,6 +86,7 @@ test("client drive paths stay absolute after chdir instead of mounting or openin
     },
   } satisfies GameFilesystem);
   vi.stubGlobal("IDBFS", {});
+  vi.stubGlobal("PATH", { isAbs: (path: string) => path.startsWith("/") });
   mountGameFilesystem({ addRunDependency() {}, removeRunDependency() {} }, () => {
     throw new Error("Unexpected restore failure");
   });
@@ -92,4 +94,9 @@ test("client drive paths stay absolute after chdir instead of mounting or openin
   expect(FS.lookupPath("app:/Gw.dat")).toEqual({ path: "/app:/Gw.dat" });
   expect(FS.lookupPath("Templates/Skills")).toEqual({ path: "Templates/Skills" });
   expect(paths).toEqual(["/app:", "/app:/Gw.dat", "Templates/Skills"]);
+  expect(["app:/Gw.dat", "/tmp", "Templates/Skills"].map((path) => PATH.isAbs(path))).toEqual([
+    true,
+    true,
+    false,
+  ]);
 });
