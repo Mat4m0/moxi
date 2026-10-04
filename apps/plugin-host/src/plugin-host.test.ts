@@ -189,7 +189,8 @@ test("subscribing to undeclared facts never exposes player or target data", asyn
   await h.until(
     () =>
       h.host.state.plugins["test.protocol"]!.hud.player?.type === "text" &&
-      h.host.state.plugins["test.protocol"]!.hud.player.text.includes("Mo Kai"),
+      h.host.state.plugins["test.protocol"]!.hud.player.text.includes("Mo Kai") &&
+      h.host.state.plugins["test.protocol"]!.hud.target !== undefined,
   );
   const hud = h.host.state.plugins["test.protocol"]!.hud;
   expect(hud).toEqual({
