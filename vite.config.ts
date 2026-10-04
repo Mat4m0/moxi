@@ -36,7 +36,7 @@ function imports(allowed: string[], otherPackages: string[], sdkTypesOnly = fals
   } satisfies OxlintOverride["rules"];
 }
 
-const desktopImports = ["@moxi/contracts", "@moxi/gwkit", "node:*", ...builtinModules];
+const desktopImports = ["@moxi/contracts", "@moxi/gwkit", "arktype", "node:*", ...builtinModules];
 const rendererPackages = ["desktop", "launcher", "game", "plugin-host"];
 
 export default defineConfig({
@@ -84,6 +84,23 @@ export default defineConfig({
           ["vue", "@moxi/contracts", "@moxi/ui", "@moxi/sdk"],
           rendererPackages.filter((name) => name !== "plugin-host"),
         ),
+      },
+      // Tests, e2e and scripts may use dev tooling, but still never reach into another package's files.
+      {
+        files: ["**/*.test.ts", "**/test/**", "e2e/**", "scripts/**"],
+        rules: {
+          "no-restricted-imports": [
+            "error",
+            {
+              patterns: [
+                {
+                  regex: "^\\.{1,2}/(?:.*/)?(?:apps|packages|plugins|tools)(/|$)",
+                  message: "Use the permitted workspace entry points for other packages.",
+                },
+              ],
+            },
+          ],
+        },
       },
     ],
   },
