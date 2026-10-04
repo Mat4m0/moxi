@@ -99,11 +99,13 @@ Before 1.0.0, data and APIs may change freely. From the first public release:
   ledgers, evidence logs or plans in the repository.
 - `pnpm check` passes before every commit you report as done.
 
-## Releases (details: docs/RELEASING.md)
+## Releases
 
-- Merging to `main` publishes to the Dev channel automatically.
-- Beta and Stable are shipped only by Matthias (`gh workflow run ship`).
-- Versions are computed from titles. Never edit version numbers or tags.
+- Nothing is released yet. `.github/workflows/build.yml` builds unsigned
+  installers on demand and on `v*` tags and publishes nothing.
+- Planned, with `docs/RELEASING.md` once the pipeline exists: merging to
+  `main` publishes Dev; Beta and Stable are shipped only by Matthias;
+  versions are computed from titles. Never edit version numbers or tags.
 
 ## When something breaks after a release
 

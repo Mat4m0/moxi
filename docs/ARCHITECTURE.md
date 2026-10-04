@@ -131,9 +131,9 @@ ArenaNet manifest → bounded parse → executable artifacts (hash-verified)
 | --- | --- |
 | `wasm` | Parse modules, decode function bodies, fingerprint functions, build call graphs |
 | `locate` | Evaluate role specs against a module; produce or verify a locator file |
-| `patch` | Apply the few declarative binary patches; validate output with `WebAssembly.validate` |
+| `patch` | Apply the few declarative binary patches; validate output with `WebAssembly.validate` (not built yet) |
 | `runtime` | Instantiate the client via `Module.instantiateWasm`, wrap the main-loop export to get one safe point per frame, read memory, call table functions, run queued actions at the safe point |
-| `game` | Domain readers that turn memory into `Observed<T>` facts and implement named actions |
+| `game` | Domain readers that turn memory into `Observed<T>` facts and implement named actions (not built yet; every fact reports `unsupported`) |
 
 - The game renderer owns the Emscripten `Module`. It loads the official glue
   and module from `moxi://app`, mounts IDBFS for templates and screenshots,
@@ -142,7 +142,7 @@ ArenaNet manifest → bounded parse → executable artifacts (hash-verified)
   value, which comes from an operand of a located function (the witness rule).
   If ArenaNet changes a struct, its reader stops matching and only that fact
   turns `unsupported`.
-- Locator files are ed25519-signed and fetched from the compatibility feed.
+- Planned: locator files are ed25519-signed and fetched from the compatibility feed.
   Without one, the app matches locally: read-only facts with a unique match
   turn on; actions wait for signed data.
 
