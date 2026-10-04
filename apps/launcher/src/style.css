@@ -232,14 +232,6 @@ main {
   background: #2a2824;
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06);
 }
-.home-tabs {
-  position: sticky;
-  top: -28px;
-  z-index: 3;
-  width: fit-content;
-  margin: 0 0 18px;
-  background: #11110e;
-}
 .news-hero {
   overflow: hidden;
 }
@@ -1636,9 +1628,11 @@ kbd {
   main {
     grid-template-columns: 1fr;
     overflow: auto;
+    container-type: size;
   }
   .hero-panel {
-    min-height: 430px;
+    /* Fill the view so the news list starts at the fold instead of peeking in. */
+    min-height: max(430px, 100cqh);
     border-right: 0;
   }
   .home-panel {

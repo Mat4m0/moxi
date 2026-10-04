@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { ChevronLeft, ChevronRight, Newspaper, Pause, Play, X } from "lucide-vue-next";
+import { ChevronLeft, ChevronRight, Pause, Play, X } from "lucide-vue-next";
 import type { LauncherData, NewsStory } from "../launcher-data";
 import BaseModal from "./BaseModal.vue";
 const props = defineProps<{ data: LauncherData }>();
@@ -142,12 +142,7 @@ onBeforeUnmount(() => {
     </div>
   </section>
   <section class="home-panel">
-    <div class="segmented home-tabs" role="tablist" aria-label="Home content">
-      <button id="news-tab" role="tab" aria-selected="true" aria-controls="news-panel">
-        <Newspaper />News
-      </button>
-    </div>
-    <div id="news-panel" role="tabpanel" aria-labelledby="news-tab">
+    <div id="news-panel">
       <div class="news-panel-head">
         <div>
           <h2>Latest news</h2>
