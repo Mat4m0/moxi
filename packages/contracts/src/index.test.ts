@@ -11,6 +11,13 @@ const denied: [ChannelName, WindowKind | undefined, unknown][] = [
   ["game.net.ack", "game", { id: 1, bytes: 0 }],
   ["game.net.connect", "game", { id: -1, destination: "8.8.8.8:6112" }],
   ["game.open", "game", undefined],
+  ["appearance.set", "game", { uiStyle: "obsidian", uiPanelOpacity: 94, uiFont: "guild-wars" }],
+  ["appearance.set", "launcher", { uiStyle: "classic", uiPanelOpacity: 39, uiFont: "guild-wars" }],
+  [
+    "appearance.set",
+    "launcher",
+    { uiStyle: "classic", uiPanelOpacity: 94.5, uiFont: "guild-wars" },
+  ],
   ["app.info", "pluginHost", undefined],
   ["game.client", "launcher", undefined],
   ["game.client", "pluginHost", undefined],

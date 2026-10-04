@@ -365,12 +365,25 @@ export function bridgeData(): LauncherData {
     ...data,
     async initialize() {
       const info = await window.moxi.invoke("app.info", undefined);
+      const appearance = await window.moxi.invoke("appearance.get", undefined);
       data.state.value = {
         ...data.state.value,
+        settings: { ...data.state.value.settings, ...appearance },
         productName: info.productName,
         version: info.version,
         appUpdate: { phase: "idle", currentVersion: info.version },
       };
+    },
+    async saveSettings(patch) {
+      const settings = { ...data.state.value.settings, ...patch };
+      const { uiStyle, uiFont, uiPanelOpacity, uiCustomTheme } = settings;
+      await window.moxi.invoke("appearance.set", {
+        uiStyle,
+        uiFont,
+        uiPanelOpacity,
+        uiCustomTheme,
+      });
+      data.state.value = { ...data.state.value, settings };
     },
     async play() {
       await window.moxi.invoke("game.open", undefined);

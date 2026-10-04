@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref } from "vue";
+import { nextTick, onMounted, ref, watch } from "vue";
+import { appearanceVariables } from "@moxi/ui";
 import { AlertTriangle } from "lucide-vue-next";
 import type { LauncherData, LauncherRoute, Profile, SettingsRoute } from "./launcher-data";
 import AccountsView from "./components/AccountsView.vue";
@@ -13,6 +14,25 @@ import LaunchBar from "./components/LaunchBar.vue";
 import ShortcutSetting from "./components/ShortcutSetting.vue";
 const props = defineProps<{ data: LauncherData; embedded?: boolean }>();
 const state = props.data.state;
+let appliedVariables: string[] = [];
+watch(
+  () => state.value.settings,
+  (settings) => {
+    const root = document.documentElement;
+    for (const key of appliedVariables) root.style.removeProperty(key);
+    const variables = appearanceVariables(settings);
+    appliedVariables = Object.keys(variables);
+    for (const [key, value] of Object.entries(variables)) root.style.setProperty(key, value);
+    root.dataset.uiStyle =
+      settings.uiStyle === "custom"
+        ? settings.uiCustomTheme?.material === "modern"
+          ? "obsidian"
+          : "classic"
+        : settings.uiStyle;
+    root.dataset.uiFont = settings.uiFont;
+  },
+  { immediate: true },
+);
 const ready = ref(false);
 const startupError = ref(false);
 const error = ref("");

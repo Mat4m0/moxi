@@ -4,11 +4,10 @@ import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { type } from "arktype";
+import { createAppearanceSettings } from "./appearance";
 import {
   openDatabase,
   migrations,
-  defineSettings,
   docs,
   createCredentialStore,
   type Database,
@@ -155,19 +154,17 @@ test.each([
   ["wrong type", '"loud"'],
 ])("a stored setting with %s falls back without repeated log lines", (_reason, json) => {
   const db = setup().open();
-  db.prepare("INSERT INTO settings VALUES (?, ?)").run("volume", json);
+  db.prepare("INSERT INTO settings VALUES (?, ?)").run("uiPanelOpacity", json);
   const logs: string[] = [];
-  const settings = defineSettings(
-    db,
-    { volume: { schema: type("0 <= number <= 100"), default: 50 } },
-    { log: (message) => logs.push(message) },
-  );
-  expect(settings.get("volume")).toBe(50);
-  expect(settings.all()).toEqual({ volume: 50 });
-  expect(logs).toEqual(['Invalid stored setting "volume"; using default.']);
-  expect(() => settings.set("volume", 101)).toThrow();
-  settings.set("volume", 75);
-  expect(settings.get("volume")).toBe(75);
+  const settings = createAppearanceSettings(db, (message) => logs.push(message));
+  expect(settings.get()).toEqual({ uiStyle: "classic", uiPanelOpacity: 94, uiFont: "guild-wars" });
+  settings.get();
+  expect(logs).toEqual(['Invalid stored setting "uiPanelOpacity"; using default.']);
+  expect(() =>
+    settings.set({ uiStyle: "classic", uiPanelOpacity: 101, uiFont: "guild-wars" }),
+  ).toThrow();
+  settings.set({ uiStyle: "classic", uiPanelOpacity: 75, uiFont: "guild-wars" });
+  expect(settings.get()).toEqual({ uiStyle: "classic", uiPanelOpacity: 75, uiFont: "guild-wars" });
 });
 
 test("stale document writes cannot overwrite fresh data or send a change event", () => {
@@ -260,4 +257,16 @@ test("saved credentials survive reopening as encrypted blobs and clear removes t
   expect(reopened.load("test-account") === "synthetic-secret").toBe(true);
   reopened.clear("test-account");
   expect(reopened.load("test-account")).toBeNull();
+});
+
+test("appearance saved through Main settings survives reopening the database", () => {
+  const fixture = setup();
+  const db = fixture.open();
+  createAppearanceSettings(db).set({ uiStyle: "obsidian", uiPanelOpacity: 80, uiFont: "inter" });
+  db.close();
+  expect(createAppearanceSettings(fixture.open()).get()).toEqual({
+    uiStyle: "obsidian",
+    uiPanelOpacity: 80,
+    uiFont: "inter",
+  });
 });

@@ -116,6 +116,16 @@ test("shell keeps one launcher, rejects launcher actions from the game, and quit
       expect((await drive(["windows"])).stdout).toContain("launcher\tMoxi");
       await drive(["screenshot", "launcher", testInfo.outputPath("launcher.png")]);
     });
+    await test.step("appearance saves Modern before opening the game", async () => {
+      await launcher.getByRole("button", { name: "Settings", exact: true }).click();
+      await launcher.getByRole("button", { name: "Appearance", exact: true }).click();
+      await launcher.screenshot({ path: resolve(root, ".evidence/l2/launcher-before.png") });
+      await launcher.getByRole("combobox", { name: /^Panel style/ }).selectOption("obsidian");
+      await expect(launcher.getByRole("combobox", { name: /^Panel style/ })).toHaveValue(
+        "obsidian",
+      );
+      await launcher.screenshot({ path: resolve(root, ".evidence/l2/launcher-after.png") });
+    });
     await test.step("Play opens the game through the drive command", async () => {
       await drive(["click", "launcher", "Play"]);
       await expect
@@ -131,6 +141,16 @@ test("shell keeps one launcher, rejects launcher actions from the game, and quit
       await game.screenshot({ path: resolve(root, ".evidence/w1/game-before.png") });
       await game.keyboard.press(process.platform === "darwin" ? "Meta+r" : "Control+r");
       await expect(game.getByRole("dialog", { name: "Hub", exact: true })).toBeVisible();
+      await expect(game.locator("html")).toHaveAttribute("data-ui-style", "obsidian");
+      await game.screenshot({ path: resolve(root, ".evidence/l2/hub-modern.png") });
+      await launcher.getByRole("combobox", { name: /^Panel style/ }).selectOption("classic");
+      await expect(game.locator("html")).toHaveAttribute("data-ui-style", "classic");
+      await launcher.getByRole("combobox", { name: /^Panel style/ }).selectOption("custom");
+      await launcher.getByRole("combobox", { name: /^Panel finish/ }).selectOption("modern");
+      await expect(game.locator("html")).toHaveAttribute("data-ui-style", "obsidian");
+      await expect(launcher.locator("html")).toHaveAttribute("data-ui-style", "obsidian");
+      await launcher.getByRole("combobox", { name: /^Panel style/ }).selectOption("obsidian");
+      await expect(game.locator("html")).toHaveAttribute("data-ui-style", "obsidian");
       await game.getByRole("textbox").fill("10 ecto in p");
       await expect(
         game.getByText("10 Globs of Ectoplasm = 82 platinum", { exact: true }),
@@ -205,6 +225,26 @@ test("shell keeps one launcher, rejects launcher actions from the game, and quit
         .toEqual([]);
       console.log(`Quit: exit 0, signal null; ${owned.size} app processes checked, 0 remain`);
       await expect(drive(["windows"])).rejects.toThrow("Dev app is not running");
+    });
+    await test.step("relaunching with the same data folder keeps Modern selected", async () => {
+      const relaunched = await playwright._electron.launch({
+        executablePath: executable,
+        args: [appPath],
+        env,
+      });
+      try {
+        await expect
+          .poll(() => relaunched.windows().some((page) => page.url() === "moxi://app/launcher/"))
+          .toBe(true);
+        const page = relaunched.windows().find((page) => page.url() === "moxi://app/launcher/");
+        if (!page) throw new Error("Launcher did not reopen");
+        await page.getByRole("button", { name: "Settings", exact: true }).click();
+        await page.getByRole("button", { name: "Appearance", exact: true }).click();
+        await expect(page.getByRole("combobox", { name: /^Panel style/ })).toHaveValue("obsidian");
+        await page.screenshot({ path: resolve(root, ".evidence/l2/launcher-reopened.png") });
+      } finally {
+        await relaunched.close();
+      }
     });
   } finally {
     if (second && second.exitCode === null && second.signalCode === null) {

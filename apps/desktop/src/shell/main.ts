@@ -12,6 +12,9 @@ import { handle } from "./ipc.js";
 import { createGameNetwork } from "../game-network/index.js";
 import { createClientRoutes } from "./client.js";
 
+import { openDatabase, migrations } from "../storage/index.js";
+import { createAppearanceSettings } from "../storage/appearance.js";
+
 const repoRoot = resolve(import.meta.dirname, "../../..");
 const identity = resolveIdentity(app.isPackaged);
 const cache =
@@ -197,7 +200,28 @@ else {
           });
         }
       });
+      const database = openDatabase({
+        file: join(folders.data, "moxi.sqlite"),
+        backupDir: join(folders.data, "backups"),
+        appVersion: app.getVersion(),
+        migrations,
+      });
+      app.once("will-quit", () => database.close());
+      const appearance = createAppearanceSettings(database);
       const windowKind = (id: number) => windows.get(id)?.kind;
+      handle("appearance.get", () => appearance.get(), windowKind);
+      handle(
+        "appearance.set",
+        (settings) => {
+          appearance.set(settings);
+          for (const entry of windows.values()) {
+            if (entry.kind === "game" && !entry.window.webContents.isDestroyed())
+              entry.window.webContents.send("appearance.changed", appearance.get());
+          }
+          return undefined;
+        },
+        windowKind,
+      );
       handle(
         "game.client",
         async (_request, owner) => {
