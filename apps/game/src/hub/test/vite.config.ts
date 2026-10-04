@@ -8,14 +8,13 @@ export default defineConfig({
   plugins: [vue()],
   test: {
     watch: false,
-    expect: { poll: { timeout: 500 } },
     api: { host: "127.0.0.1", port: 4618, strictPort: true },
     include: ["apps/game/src/hub/hub.contract.test.ts"],
     browser: {
       enabled: true,
       headless: true,
       screenshotFailures: false,
-      provider: playwright({ actionTimeout: 1000 }),
+      provider: playwright(),
       instances: [{ browser: "chromium" }],
     },
   },
