@@ -7,6 +7,7 @@ import { DatabaseSync } from "node:sqlite";
 import { type } from "arktype";
 import {
   openDatabase,
+  migrations,
   defineSettings,
   docs,
   createCredentialStore,
@@ -26,8 +27,8 @@ function setup() {
   };
   return {
     ...options,
-    open(migrations: Migration[] = []) {
-      const db = openDatabase({ ...options, migrations });
+    open(migrationList: readonly Migration[] = migrations) {
+      const db = openDatabase({ ...options, migrations: migrationList });
       databases.push(db);
       return db;
     },
@@ -40,17 +41,35 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+test("opening without schema migrations cannot silently create unversioned tables", () => {
+  const fixture = setup();
+  const empty = fixture.open([]);
+  expect(empty.prepare("SELECT name FROM sqlite_schema WHERE type = 'table'").all()).toEqual([]);
+  expect(empty.prepare("PRAGMA user_version").get()?.user_version).toBe(0);
+  empty.close();
+  const migrated = fixture.open(migrations);
+  expect(
+    migrated
+      .prepare("SELECT name FROM sqlite_schema WHERE type = 'table' ORDER BY name")
+      .all()
+      .map((row) => row.name),
+  ).toEqual(["credentials", "documents", "settings"]);
+  expect(migrated.prepare("PRAGMA user_version").get()?.user_version).toBe(1);
+});
+
 test("a failed second pending migration cannot leave the first migration or version committed", () => {
   const fixture = setup();
   const db = fixture.open([
-    { version: 1, sql: "CREATE TABLE player (name TEXT); INSERT INTO player VALUES ('original');" },
+    ...migrations,
+    { version: 2, sql: "CREATE TABLE player (name TEXT); INSERT INTO player VALUES ('original');" },
   ]);
   db.exec("INSERT INTO player VALUES ('wal-data')");
   db.close();
   expect(() =>
     fixture.open([
-      { version: 2, sql: "UPDATE player SET name = 'changed'" },
-      { version: 3, sql: "INSERT INTO missing_table VALUES (1)" },
+      ...migrations,
+      { version: 3, sql: "UPDATE player SET name = 'changed'" },
+      { version: 4, sql: "INSERT INTO missing_table VALUES (1)" },
     ]),
   ).toThrow();
   const reopened = fixture.open();
@@ -60,7 +79,7 @@ test("a failed second pending migration cannot leave the first migration or vers
       .all()
       .map((row) => row.name),
   ).toEqual(["original", "wal-data"]);
-  expect(reopened.prepare("PRAGMA user_version").get()?.user_version).toBe(1);
+  expect(reopened.prepare("PRAGMA user_version").get()?.user_version).toBe(2);
   const backups = readdirSync(fixture.backupDir);
   expect(backups).toHaveLength(1);
   const backupName = backups[0];
@@ -73,16 +92,16 @@ test("a failed second pending migration cannot leave the first migration or vers
       .all()
       .map((row) => row.name),
   ).toEqual(["original", "wal-data"]);
-  expect(backup.prepare("PRAGMA user_version").get()?.user_version).toBe(1);
+  expect(backup.prepare("PRAGMA user_version").get()?.user_version).toBe(2);
 });
 
 test("a fourth migration backup removes the oldest while reopening without migrations adds none", () => {
   vi.useFakeTimers();
   const fixture = setup();
   fixture.open().close();
-  for (const version of [1, 2, 3, 4]) {
-    vi.setSystemTime(new Date(`2026-10-0${version}T12:00:00Z`));
-    fixture.open([{ version, sql: "SELECT 1" }]).close();
+  for (const day of [1, 2, 3, 4]) {
+    vi.setSystemTime(new Date(`2026-10-0${day}T12:00:00Z`));
+    fixture.open([...migrations, { version: day + 1, sql: "SELECT 1" }]).close();
   }
   fixture.open().close();
   expect(readdirSync(fixture.backupDir).sort()).toEqual([
@@ -97,8 +116,8 @@ test("repeated migration attempts in one millisecond cannot overwrite an earlier
   vi.setSystemTime(new Date("2026-10-04T12:00:00Z"));
   const fixture = setup();
   fixture.open().close();
-  fixture.open([{ version: 1, sql: "CREATE TABLE item (name TEXT)" }]).close();
-  fixture.open([{ version: 2, sql: "INSERT INTO item VALUES ('saved')" }]).close();
+  fixture.open([...migrations, { version: 2, sql: "CREATE TABLE item (name TEXT)" }]).close();
+  fixture.open([...migrations, { version: 3, sql: "INSERT INTO item VALUES ('saved')" }]).close();
   expect(readdirSync(fixture.backupDir).sort()).toEqual([
     "0.1.0-2026-10-04T12-00-00.000Z.sqlite",
     "0.1.0-2026-10-04T12-00-00.001Z.sqlite",
@@ -111,11 +130,15 @@ test.each([[0], [1, 1], [2, 1], [1.5], [2147483648]])(
     const fixture = setup();
     fixture
       .open([
-        { version: 1, sql: "CREATE TABLE item (name TEXT); INSERT INTO item VALUES ('saved')" },
+        ...migrations,
+        { version: 2, sql: "CREATE TABLE item (name TEXT); INSERT INTO item VALUES ('saved')" },
       ])
       .close();
     expect(() =>
-      fixture.open(versions.map((version) => ({ version, sql: "DELETE FROM item" }))),
+      fixture.open([
+        ...migrations,
+        ...versions.map((version) => ({ version, sql: "DELETE FROM item" })),
+      ]),
     ).toThrow("Migration versions must be positive and strictly increasing.");
     expect(
       fixture
