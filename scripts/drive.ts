@@ -50,7 +50,7 @@ async function drive() {
     );
   }
   const browser = await chromium
-    .connectOverCDP(`http://127.0.0.1:${port}`, { timeout: 5000 })
+    .connectOverCDP(`http://127.0.0.1:${port}`, { timeout: 30_000 })
     .catch(() => {
       throw new Error(
         `Dev app is not running at CDP port ${port}. Start pnpm dev; use the same MOXI_DATA_DIR.`,

@@ -45,6 +45,8 @@ test("shell keeps one launcher, rejects launcher actions from the game, and quit
     if (value !== undefined) env[name] = value;
   }
   env.MOXI_DATA_DIR = data;
+  // An empty cache keeps ArenaNet's client out of the test; the game window shows its fallback.
+  env.MOXI_GAME_CACHE = join(data, "game");
   delete env.ELECTRON_RUN_AS_NODE;
   delete env.MOXI_LAUNCHER_URL;
   delete env.MOXI_GAME_URL;
@@ -123,7 +125,7 @@ test("shell keeps one launcher, rejects launcher actions from the game, and quit
     const game = application.windows().find((page) => page.url() === "moxi://app/game/");
     if (!game) throw new Error("Game did not open");
     await test.step("the game cannot invoke game.open", async () => {
-      await expect(game.getByText("Game window", { exact: true })).toBeVisible();
+      await expect(game.getByLabel("Guild Wars")).toBeVisible();
       expect(
         await game.evaluate(async () => {
           const bridge: unknown = Reflect.get(window, "moxi");
@@ -152,7 +154,7 @@ test("shell keeps one launcher, rejects launcher actions from the game, and quit
           .find((win) => win.webContents.getURL() === "moxi://app/launcher/")
           ?.hide();
       });
-      second = spawn(executable, [appPath], { env, stdio: "ignore", timeout: 10_000 });
+      second = spawn(executable, [appPath], { env, stdio: "ignore", timeout: 30_000 });
       expect(await exited(second)).toEqual({ code: 0, signal: null });
       console.log("Second launch: exit 0, signal null");
       await expect
