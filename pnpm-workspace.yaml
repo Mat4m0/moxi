@@ -5,3 +5,6 @@ packages:
   - tools/*
 
 minimumReleaseAge: 1440
+
+overrides:
+  vite: npm:@voidzero-dev/vite-plus-core@1.0.0

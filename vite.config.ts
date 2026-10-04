@@ -38,6 +38,7 @@ function imports(allowed: string[], otherPackages: string[], sdkTypesOnly = fals
 
 const desktopImports = [
   "@moxi/contracts",
+  "@moxi/contracts/windows",
   "@moxi/gwkit",
   "arktype",
   "node:*",
@@ -94,7 +95,7 @@ export default defineConfig({
       },
       // Tests, e2e and scripts may use dev tooling, but still never reach into another package's files.
       {
-        files: ["**/*.test.ts", "**/test/**", "e2e/**", "scripts/**"],
+        files: ["**/*.test.ts", "**/test/**", "e2e/**", "scripts/**", "**/vite.config.ts"],
         rules: {
           "no-restricted-imports": [
             "error",

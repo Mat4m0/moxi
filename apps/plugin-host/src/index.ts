@@ -1,1 +1,1 @@
-export {};
+console.log("plugin host ready");
