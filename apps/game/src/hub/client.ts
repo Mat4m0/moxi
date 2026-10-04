@@ -1,9 +1,9 @@
 import { reactive } from "vue";
 import { emptyHubState } from "@moxi/sdk/host";
-import type { HubPort, HubToast, HubToHost } from "@moxi/sdk/host";
+import type { HubPort, HubSnapshot, HubToast, HubToHost } from "@moxi/sdk/host";
 import type { ActionResult, Observed, Slice } from "@moxi/sdk";
 
-export const host = reactive(emptyHubState());
+export const host = reactive<HubSnapshot>(emptyHubState());
 let port: HubPort | undefined;
 let seq = 0;
 let session = 0;

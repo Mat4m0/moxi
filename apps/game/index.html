@@ -29,6 +29,16 @@
         pointer-events: none;
         background: #000;
       }
+      #hub-root {
+        position: fixed;
+        inset: 0;
+        z-index: 2;
+        isolation: isolate;
+        pointer-events: none;
+      }
+      #hub-root > * {
+        pointer-events: auto;
+      }
       [hidden] {
         display: none;
       }
@@ -37,6 +47,7 @@
   <body>
     <canvas id="canvas" width="960" height="640" tabindex="0" aria-label="Guild Wars"></canvas>
     <div role="status">Starting Guild Wars…</div>
+    <div id="hub-root"></div>
     <script type="module" src="/src/index.ts"></script>
   </body>
 </html>

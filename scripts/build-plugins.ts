@@ -10,7 +10,8 @@ const index: { manifest: string; script: string; bytes: number }[] = [];
 const dirs = (await readdir(join(root, "plugins"), { withFileTypes: true }))
   .filter((dir) => dir.isDirectory())
   .map((dir) => join(root, "plugins", dir.name));
-dirs.push(join(root, "apps/plugin-host/test-fixtures/chaos"));
+if (!process.argv.includes("--bundled"))
+  dirs.push(join(root, "apps/plugin-host/test-fixtures/chaos"));
 dirs.sort((a, b) => basename(a).localeCompare(basename(b)));
 for (const dir of dirs) {
   const json = await readFile(join(dir, "plugin.json"), "utf8");

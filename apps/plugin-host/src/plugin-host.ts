@@ -36,15 +36,25 @@ export class PluginHost {
     target: { ok: false, reason: "not-in-game" },
     map: { ok: false, reason: "not-in-game" },
   };
+  private disposed = false;
+  private frame: (() => void) | undefined;
   private watchdog: ReturnType<typeof setInterval>;
 
   constructor(
     private port: HostPort,
     private createWorker: (script: string, id: string) => PluginWorker,
     private documents: Pick<Storage, "getItem" | "setItem">,
+    private scheduleFrame: (callback: () => void) => void = (callback) => {
+      requestAnimationFrame(callback);
+    },
   ) {
+    port.onClose?.(() => this.dispose());
     port.listen((message) => {
+      if (this.disposed) return;
       switch (message.t) {
+        case "dispose":
+          this.dispose();
+          break;
         case "openHub":
           this.hubOpen = true;
           this.hubSession++;
@@ -131,7 +141,20 @@ export class PluginHost {
   }
 
   private changed() {
-    this.port.post({ t: "state", state: this.state });
+    if (this.disposed || this.frame) return;
+    const frame = () => {
+      this.frame = undefined;
+      if (this.disposed) return;
+      const plugins = Object.fromEntries(
+        Object.entries(this.state.plugins).map(([id, p]) => {
+          const { script: _script, bytes: _bytes, subscriptions: _subscriptions, ...visible } = p;
+          return [id, visible];
+        }),
+      );
+      this.port.post({ t: "state", state: { ...this.state, plugins } });
+    };
+    this.frame = frame;
+    this.scheduleFrame(frame);
   }
   private log(text: string, tone: "info" | "refused" | "error" = "info") {
     this.state.log.unshift({ at: Date.now(), text, tone });
@@ -455,8 +478,17 @@ export class PluginHost {
     );
   }
   dispose() {
+    if (this.disposed) return;
+    this.hubOpen = false;
+    this.hubSession++;
+    this.queryGen++;
     clearInterval(this.watchdog);
     for (const timer of this.timers) clearTimeout(timer);
     for (const id of this.running.keys()) this.stopPlugin(id);
+    this.state.views = {};
+    this.state.toasts = [];
+    this.state.queryResults = {};
+    this.state.queryFor = null;
+    this.disposed = true;
   }
 }

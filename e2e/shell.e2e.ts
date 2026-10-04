@@ -124,6 +124,23 @@ test("shell keeps one launcher, rejects launcher actions from the game, and quit
     });
     const game = application.windows().find((page) => page.url() === "moxi://app/game/");
     if (!game) throw new Error("Game did not open");
+    await test.step("Hub works above the unavailable client and closes with Escape", async () => {
+      await expect(game.getByRole("status")).toHaveText(
+        "The game client is unavailable. Run fetch-client and restart Moxi.",
+      );
+      await game.screenshot({ path: resolve(root, ".evidence/w1/game-before.png") });
+      await game.keyboard.press(process.platform === "darwin" ? "Meta+r" : "Control+r");
+      await expect(game.getByRole("dialog", { name: "Hub", exact: true })).toBeVisible();
+      await game.getByRole("textbox").fill("10 ecto in p");
+      await expect(
+        game.getByText("10 Globs of Ectoplasm = 82 platinum", { exact: true }),
+      ).toBeVisible();
+      await game.screenshot({ path: resolve(root, ".evidence/w1/hub-open.png") });
+      await game.keyboard.press("Escape");
+      await expect(game.getByRole("textbox")).toHaveValue("");
+      await game.keyboard.press("Escape");
+      await expect(game.getByRole("dialog", { name: "Hub", exact: true })).toHaveCount(0);
+    });
     await test.step("the game cannot invoke game.open", async () => {
       await expect(game.getByLabel("Guild Wars")).toBeVisible();
       expect(

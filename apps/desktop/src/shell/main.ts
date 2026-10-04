@@ -1,4 +1,4 @@
-import { app, BrowserWindow, net, protocol, session } from "electron";
+import { app, BrowserWindow, MessageChannelMain, net, protocol, session } from "electron";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 import { resolveIdentity } from "../identity.js";
 import { resolveFolders } from "../folders.js";
 import { resolveRendererPath } from "../protocol-path.js";
+import { hubPortMessage } from "@moxi/contracts/windows";
 import type { WindowKind } from "@moxi/contracts";
 import { handle } from "./ipc.js";
 import { createClientRoutes } from "./client.js";
@@ -46,6 +47,8 @@ if (!app.isPackaged && process.env.MOXI_CDP_PORT) {
 const windows = new Map<number, { kind: WindowKind; window: BrowserWindow }>();
 let launcher: BrowserWindow | undefined;
 let game: BrowserWindow | undefined;
+let pluginHost: BrowserWindow;
+let pluginHostReady: Promise<void>;
 let client = createClientRoutes(folders.gameCache);
 const csp =
   "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; worker-src 'self' blob:; connect-src 'self'";
@@ -68,9 +71,26 @@ function createWindow(kind: WindowKind) {
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
+      backgroundThrottling: kind !== "pluginHost",
       webSecurity: true,
     },
   });
+  if (kind === "game") {
+    const loaded = new Promise<void>((done) =>
+      win.webContents.once("did-finish-load", () => done()),
+    );
+    void Promise.all([loaded, pluginHostReady]).then(() => {
+      if (win.isDestroyed()) return;
+      const { port1, port2 } = new MessageChannelMain();
+      pluginHost.webContents.postMessage(hubPortMessage, win.webContents.id, [port1]);
+      win.webContents.postMessage(hubPortMessage, win.webContents.id, [port2]);
+      const sessionId = win.webContents.id;
+      win.once("closed", () => {
+        if (!pluginHost.isDestroyed())
+          pluginHost.webContents.postMessage(hubPortMessage, sessionId);
+      });
+    });
+  }
   windows.set(win.webContents.id, { kind, window: win });
   const id = win.webContents.id;
   win.on("closed", () => {
@@ -179,7 +199,10 @@ else {
         },
         windowKind,
       );
-      createWindow("pluginHost");
+      pluginHost = createWindow("pluginHost");
+      pluginHostReady = new Promise((done) =>
+        pluginHost.webContents.once("did-finish-load", () => done()),
+      );
       showLauncher();
     })
     .catch((error: unknown) => {

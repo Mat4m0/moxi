@@ -16,10 +16,14 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function harness(permissions = ["game.travel"]) {
+function harness(
+  permissions = ["game.travel"],
+  scheduleFrame = (callback: () => void) => callback(),
+) {
   const channel = new MessageChannel();
   const db = new DatabaseSync(":memory:");
   db.exec("CREATE TABLE documents (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+  let terminated = 0;
   const messages: HostToHub[] = [];
   let signal: (() => void) | undefined;
   channel.port2.on("message", (message: HostToHub) => {
@@ -28,6 +32,7 @@ function harness(permissions = ["game.travel"]) {
   });
   const host = new PluginHost(
     {
+      onClose: (handler) => channel.port1.on("close", handler),
       post: (message) => channel.port1.postMessage(message),
       listen: (handler) => channel.port1.on("message", handler),
     },
@@ -42,6 +47,7 @@ function harness(permissions = ["game.travel"]) {
           worker.on("error", (error) => onError(error.message));
         },
         terminate: () => {
+          terminated++;
           void worker.terminate();
         },
       };
@@ -55,6 +61,7 @@ function harness(permissions = ["game.travel"]) {
         db.prepare("INSERT OR REPLACE INTO documents VALUES (?, ?)").run(key, value);
       },
     },
+    scheduleFrame,
   );
   cleanup.push(() => {
     host.dispose();
@@ -94,7 +101,7 @@ function harness(permissions = ["game.travel"]) {
     await until(() => messages.some((m) => m.t === "commandResult" && m.requestId === id));
   }
   send({ t: "openHub" });
-  return { host, messages, send, until, command };
+  return { host, messages, send, until, command, channel, terminated: () => terminated };
 }
 
 test.each([
@@ -285,4 +292,38 @@ test("Results from a new query never mix with another plugin's previous query an
     [{ id: "new", title: "new", actions: [] }],
     [{ id: "new", title: "new", actions: [] }],
   ]);
+});
+
+test("closing a game port stops its workers and withdraws every plugin surface", async () => {
+  const h = harness();
+  await h.command("capture");
+  h.channel.port2.close();
+  await new Promise<void>((done) => h.channel.port1.once("close", done));
+  expect(h.terminated()).toBe(1);
+  expect(h.host.state.plugins["test.protocol"]!.status).toBe("stopped");
+  expect(h.host.state.plugins["test.protocol"]!.items).toEqual([]);
+  expect(h.host.state.plugins["test.protocol"]!.hud).toEqual({});
+  expect(h.host.state.views).toEqual({});
+  expect(h.host.state.queryResults).toEqual({});
+  expect(h.host.state.toasts).toEqual([]);
+});
+
+test("100 plugin updates share one snapshot per frame without leaking worker code", async () => {
+  const frames: (() => void)[] = [];
+  const h = harness([], (callback) => frames.push(callback));
+  for (let i = 0; i < 100; i++) await h.command("clear");
+  expect(h.messages.filter((message) => message.t === "state")).toHaveLength(0);
+  expect(frames).toHaveLength(1);
+  frames.shift()!();
+  await h.until(() => h.messages.some((message) => message.t === "state"));
+  const snapshot = h.messages.find((message) => message.t === "state");
+  if (snapshot?.t !== "state") throw new Error("Missing snapshot");
+  expect(snapshot.state.plugins["test.protocol"]).not.toHaveProperty("script");
+  expect(snapshot.state.plugins["test.protocol"]).not.toHaveProperty("bytes");
+  for (let i = 0; i < 100; i++) await h.command("clear");
+  expect(h.messages.filter((message) => message.t === "state")).toHaveLength(1);
+  expect(frames).toHaveLength(1);
+  frames.shift()!();
+  await h.until(() => h.messages.filter((message) => message.t === "state").length === 2);
+  expect(h.messages.filter((message) => message.t === "state")).toHaveLength(2);
 });

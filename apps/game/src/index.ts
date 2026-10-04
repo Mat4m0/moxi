@@ -1,3 +1,4 @@
+import "./hub/main.ts";
 import type { Bridge } from "@moxi/contracts";
 import { createRuntime } from "@moxi/gwkit";
 import { mountGameFilesystem } from "./filesystem";

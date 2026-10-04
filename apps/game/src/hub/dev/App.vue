@@ -186,7 +186,7 @@ const fmtTime = (t: number) =>
             ></span
           >
           <small
-            >{{ (p.bytes / 1024).toFixed(1) }} KiB · {{ p.manifest.activation.join(", ") }} ·
+            >{{ p.manifest.activation.join(", ") }} ·
             {{ p.manifest.permissions.join(", ") || "no permissions" }}</small
           >
           <small v-if="p.crashReason" class="err">{{ p.crashReason }}</small>

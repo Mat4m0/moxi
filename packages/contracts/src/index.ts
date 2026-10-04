@@ -26,7 +26,7 @@ export const channels = {
   "game.open": defineChannel({ request: type("undefined"), response: type("undefined") }),
 };
 import { windowChannels, type WindowKind } from "./windows.js";
-export { windowChannels, type WindowKind } from "./windows.js";
+export { hubPortMessage, windowChannels, type WindowKind } from "./windows.js";
 export type ChannelName = keyof typeof channels;
 export type RequestOf<N extends ChannelName> = (typeof channels)[N]["request"]["infer"];
 export type ResponseOf<N extends ChannelName> = (typeof channels)[N]["response"]["infer"];

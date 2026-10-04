@@ -5,6 +5,12 @@ import { createServer } from "node:net";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
 
+await new Promise<void>((done, reject) => {
+  const build = spawn("node", ["scripts/build-plugins.ts", "--bundled"], { stdio: "inherit" });
+  build.once("error", reject);
+  build.once("exit", (code) => (code === 0 ? done() : reject(new Error("Plugin build failed"))));
+});
+
 const root = resolve(import.meta.dirname, "..");
 const children = new Set<ChildProcess>();
 let stopping = false;

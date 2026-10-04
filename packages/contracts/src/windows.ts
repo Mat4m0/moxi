@@ -4,3 +4,5 @@ export const windowChannels = {
   pluginHost: [],
 } as const;
 export type WindowKind = keyof typeof windowChannels;
+
+export const hubPortMessage = "moxi-hub-port";

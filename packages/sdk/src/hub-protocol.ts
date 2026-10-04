@@ -30,6 +30,7 @@ export type HubState = {
   gameActions: string[];
 };
 export type HubToHost =
+  | { t: "dispose" }
   | { t: "openHub" }
   | { t: "closeHub" }
   | { t: "query"; text: string; scope: string | null }
@@ -49,11 +50,16 @@ export type HubToHost =
   | { t: "toast"; plugin: string; toast: HubToast }
   | { t: "facts"; values: Record<Slice, Observed<unknown>> }
   | { t: "actionResult"; requestId: number; result: ActionResult };
+export type HubSnapshot = Omit<HubState, "plugins"> & {
+  plugins: Record<string, Omit<PluginInstance, "script" | "bytes" | "subscriptions">>;
+};
+
 export type HostToHub =
-  | { t: "state"; state: HubState }
+  | { t: "state"; state: HubSnapshot }
   | { t: "commandResult"; requestId: number; viewId: string | null }
   | { t: "gameAction"; requestId: number; op: "game.loadBuild" | "game.travel"; args: unknown };
 export type HostPort = {
+  onClose?(handler: () => void): void;
   post(message: HostToHub): void;
   listen(handler: (message: HubToHost) => void): void;
 };
