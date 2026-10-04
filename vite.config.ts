@@ -68,20 +68,6 @@ export default defineConfig({
         rules: imports(desktopImports, ["launcher", "game", "plugin-host"]),
       },
       {
-        files: ["apps/desktop/src/game-files/**"],
-        rules: imports(
-          [...desktopImports, "arktype", "node:fs/promises"],
-          ["launcher", "game", "plugin-host"],
-        ),
-      },
-      {
-        files: ["apps/desktop/src/game-files/**/*.test.ts"],
-        rules: imports(
-          [...desktopImports, "arktype", "node:fs/promises", "vite-plus/test"],
-          ["launcher", "game", "plugin-host"],
-        ),
-      },
-      {
         files: ["apps/desktop/src/shell/**"],
         rules: imports([...desktopImports, "electron"], ["launcher", "game", "plugin-host"]),
       },
