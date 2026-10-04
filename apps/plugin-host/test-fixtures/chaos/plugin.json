@@ -1,0 +1,30 @@
+{
+  "id": "test.chaos",
+  "name": "Chaos (test plugin)",
+  "version": "0.0.1",
+  "api": 1,
+  "description": "Misbehaves on purpose to show that a broken plugin cannot freeze the game or the Hub.",
+  "icon": { "glyph": "bolt" },
+  "permissions": ["game.travel"],
+  "activation": ["command"],
+  "commands": [
+    {
+      "id": "freeze",
+      "title": "Chaos: Freeze forever",
+      "subtitle": "Runs an infinite loop in the plugin",
+      "icon": { "glyph": "bolt" }
+    },
+    {
+      "id": "throw",
+      "title": "Chaos: Throw an error",
+      "subtitle": "Throws inside a command",
+      "icon": { "glyph": "bolt" }
+    },
+    {
+      "id": "sneaky-travel",
+      "title": "Chaos: Travel without asking",
+      "subtitle": "Tries a game action five seconds later, without a player action",
+      "icon": { "glyph": "bolt" }
+    }
+  ]
+}
