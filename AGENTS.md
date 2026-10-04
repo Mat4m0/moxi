@@ -65,6 +65,11 @@ pnpm drive <step>       # agents: drive the running Dev app (screens, keys, scre
   the Hub shell suite, the fake client. Never test private helpers or types.
 - Tables for input matrices; literal expected values; one regression test per bug.
 - Mock only ArenaNet, the clock and external HTTP. Fake timers, no sleeps.
+- No flaky tests. Wait for the complete final state, never a partial one;
+  control time with a fake or mocked clock; no retries and no short timeouts.
+  A new or changed test file must pass 20 runs in a row before it merges. A
+  test that fails once without a code change is a bug: fix it or delete it
+  the same day.
 - No tests that read source, docs or config text. Boundaries are lint rules.
 
 ## Players depend on this (from 1.0.0)
