@@ -75,7 +75,7 @@ export default defineConfig({
       {
         files: ["apps/launcher/**"],
         rules: imports(
-          ["vue", "@moxi/contracts", "@moxi/ui", "@moxi/ui/*"],
+          ["vue", "@moxi/contracts", "@moxi/ui", "@moxi/ui/*", "lucide-vue-next"],
           rendererPackages.filter((name) => name !== "launcher"),
         ),
       },
