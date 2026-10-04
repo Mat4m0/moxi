@@ -12,6 +12,8 @@ const dirs = (await readdir(join(root, "plugins"), { withFileTypes: true }))
   .map((dir) => join(root, "plugins", dir.name));
 if (!process.argv.includes("--bundled"))
   dirs.push(join(root, "apps/plugin-host/test-fixtures/chaos"));
+if (process.argv.includes("--e2e"))
+  dirs.push(join(root, "apps/plugin-host/test-fixtures/isolation"));
 dirs.sort((a, b) => basename(a).localeCompare(basename(b)));
 for (const dir of dirs) {
   const json = await readFile(join(dir, "plugin.json"), "utf8");

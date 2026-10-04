@@ -1,36 +1,22 @@
-import { hubPortMessage } from "@moxi/contracts";
+import { hubPortMessage, type Bridge } from "@moxi/contracts";
 import type { HubToHost, ToHost } from "@moxi/sdk/host";
 import { PluginHost } from "./plugin-host.ts";
 
 const sessions = new Map<number, { host: PluginHost; port: MessagePort }>();
 const plugins = loadPlugins();
+declare global {
+  interface Window {
+    moxi: Bridge<"pluginHost">;
+  }
+}
 async function loadPlugins() {
-  const base = new URL("plugins/", location.href);
-  const index: unknown = await (await fetch(new URL("index.json", base))).json();
-  if (!Array.isArray(index)) throw new Error("Invalid plugin index");
-  return Promise.all(
-    index.map(async (entry: unknown) => {
-      if (
-        !entry ||
-        typeof entry !== "object" ||
-        !("manifest" in entry) ||
-        typeof entry.manifest !== "string" ||
-        !("script" in entry) ||
-        typeof entry.script !== "string" ||
-        !("bytes" in entry) ||
-        typeof entry.bytes !== "number"
-      )
-        throw new Error("Invalid plugin index entry");
-      const manifest: unknown = await (
-        await fetch(new URL(entry.manifest.split("/").at(-1)!, base))
-      ).json();
-      return {
-        manifest,
-        script: new URL(entry.script.split("/").at(-1)!, base).href,
-        bytes: entry.bytes,
-      };
-    }),
-  );
+  // Main loads trusted bundles because the host's CSP also forbids its own fetches.
+  const bundles = await window.moxi.invoke("plugin.bundles", undefined);
+  return bundles.map(({ manifest, source, bytes }) => ({
+    manifest,
+    script: `data:text/javascript;charset=utf-8,${encodeURIComponent(source)}`,
+    bytes,
+  }));
 }
 window.addEventListener("message", (event: MessageEvent) => {
   if (
@@ -67,7 +53,11 @@ window.addEventListener("message", (event: MessageEvent) => {
         terminate: () => worker.terminate(),
       };
     },
-    localStorage,
+    {
+      read: (ref) => window.moxi.invoke("plugin.doc.read", ref),
+      write: (request) => window.moxi.invoke("plugin.doc.write", request),
+      onChange: (listener) => window.moxi.onDocumentChanged(listener),
+    },
   );
   sessions.set(id, { host, port });
   port.addEventListener("close", () => sessions.delete(id));

@@ -60,7 +60,23 @@ export const clientReadiness = type({
   .or({ state: "'preparing'", progress: download });
 export type Readiness = typeof clientReadiness.infer;
 export type Download = typeof download.infer;
+import { documentRef, documentValue, documentWrite, documentWriteResult } from "./documents.js";
+export {
+  documentRef,
+  documentValue,
+  documentChange,
+  jsonValue,
+  type DocumentRef,
+  type DocumentChange,
+  type Json,
+} from "./documents.js";
 export const channels = {
+  "plugin.doc.read": defineChannel({ request: documentRef, response: documentValue.or("null") }),
+  "plugin.doc.write": defineChannel({ request: documentWrite, response: documentWriteResult }),
+  "plugin.bundles": defineChannel({
+    request: type("undefined"),
+    response: type({ manifest: "unknown", source: "string", bytes: "number.safe >= 0" }).array(),
+  }),
   "download.pause": defineChannel({ request: type("undefined"), response: type("undefined") }),
   "download.resume": defineChannel({ request: type("undefined"), response: type("undefined") }),
   "client.readiness": defineChannel({ request: type("undefined"), response: clientReadiness }),
@@ -113,7 +129,13 @@ export type Bridge<K extends WindowKind> = {
     }
   : K extends "launcher"
     ? { onReadinessChanged(listener: (readiness: Readiness) => void): () => void }
-    : {});
+    : K extends "pluginHost"
+      ? {
+          onDocumentChanged(
+            listener: (change: import("./documents.js").DocumentChange) => void,
+          ): () => void;
+        }
+      : {});
 export function validateRequest(name: ChannelName, kind: WindowKind | undefined, input: unknown) {
   if (!kind || !windowChannels[kind].some((allowed) => allowed === name))
     throw new Error("This window cannot use that action.");

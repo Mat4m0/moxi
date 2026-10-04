@@ -15,6 +15,9 @@ import { createClientReadiness } from "../client-readiness.ts";
 import { createClientRoutes } from "./client.js";
 
 import { openDatabase, migrations } from "../storage/index.js";
+import { createPluginDocuments } from "../plugin-documents.ts";
+import { loadPluginBundles } from "../plugin-bundles.ts";
+import { pluginCsp } from "../plugin-isolation.ts";
 import { createAppearanceSettings } from "../storage/appearance.js";
 
 const repoRoot = resolve(import.meta.dirname, "../../..");
@@ -73,8 +76,9 @@ const patchFetch: typeof fetch = patchRoot
       if (
         root.protocol !== "http:" ||
         root.hostname !== "127.0.0.1" ||
-        Number(root.port) < 4600 ||
-        Number(root.port) > 4699
+        !Number.isInteger(Number(root.port)) ||
+        Number(root.port) < 1 ||
+        Number(root.port) > 65535
       )
         throw new Error("Invalid development patch root.");
       return fetch(new URL(original.pathname, root), init);
@@ -120,6 +124,7 @@ function createWindow(kind: WindowKind) {
     show: kind !== "pluginHost",
     title: identity.productName,
     webPreferences: {
+      ...(kind === "pluginHost" ? { partition: "persist:plugins" } : {}),
       preload: join(import.meta.dirname, `${kind}.cjs`),
       sandbox: true,
       contextIsolation: true,
@@ -238,6 +243,33 @@ else {
           });
         }
       });
+      const pluginSession = session.fromPartition("persist:plugins");
+      pluginSession.setPermissionRequestHandler((_contents, _permission, callback) =>
+        callback(false),
+      );
+      pluginSession.setPermissionCheckHandler(() => false);
+      pluginSession.protocol.handle("moxi", async (request) => {
+        const url = new URL(request.url);
+        const file = url.pathname.startsWith("/plugin-host/")
+          ? resolveRendererPath(request.url, roots)
+          : undefined;
+        if (!file || request.method !== "GET")
+          return new Response("Not found", {
+            status: 404,
+            headers: { "Content-Security-Policy": pluginCsp },
+          });
+        try {
+          const response = await net.fetch(pathToFileURL(file).href);
+          const headers = new Headers(response.headers);
+          headers.set("Content-Security-Policy", pluginCsp);
+          return new Response(response.body, { status: response.status, headers });
+        } catch {
+          return new Response("Not found", {
+            status: 404,
+            headers: { "Content-Security-Policy": pluginCsp },
+          });
+        }
+      });
       const database = openDatabase({
         file: join(folders.data, "moxi.sqlite"),
         backupDir: join(folders.data, "backups"),
@@ -247,6 +279,15 @@ else {
       app.once("will-quit", () => database.close());
       const appearance = createAppearanceSettings(database);
       const windowKind = (id: number) => windows.get(id)?.kind;
+      const pluginDocuments = createPluginDocuments(database);
+      handle("plugin.doc.read", (ref) => pluginDocuments.read(ref), windowKind);
+      handle("plugin.doc.write", (request) => pluginDocuments.write(request), windowKind);
+      handle("plugin.bundles", () => loadPluginBundles(roots["plugin-host"]), windowKind);
+      pluginDocuments.onChange((change) => {
+        for (const { kind, window } of windows.values())
+          if (kind === "pluginHost" && !window.webContents.isDestroyed())
+            window.webContents.send("plugin.doc.changed", change);
+      });
       handle("appearance.get", () => appearance.get(), windowKind);
       handle(
         "appearance.set",

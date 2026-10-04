@@ -1,3 +1,5 @@
+import { jsonValue, type DocumentChange, type DocumentRef, type Json } from "@moxi/contracts";
+import type { DocumentPort } from "./documents.ts";
 import { emptyHubState, parseManifest } from "@moxi/sdk/host";
 import type { HostPort, HubState, HubToast, ToHost, ToPlugin, WireItem } from "@moxi/sdk/host";
 import type { ActionResult, Observed, Slice } from "@moxi/sdk";
@@ -15,6 +17,7 @@ type Running = {
   tokens: Map<string, number>;
   requests: Map<number, (items: WireItem[]) => void>;
   commands: Map<number, () => void>;
+  documents: Map<string, { value: Json; revision: number }>;
 };
 
 export class PluginHost {
@@ -38,16 +41,18 @@ export class PluginHost {
   };
   private disposed = false;
   private frame: (() => void) | undefined;
+  private unsubscribeDocuments: () => void;
   private watchdog: ReturnType<typeof setInterval>;
 
   constructor(
     private port: HostPort,
     private createWorker: (script: string, id: string) => PluginWorker,
-    private documents: Pick<Storage, "getItem" | "setItem">,
+    private documents: DocumentPort,
     private scheduleFrame: (callback: () => void) => void = (callback) => {
       requestAnimationFrame(callback);
     },
   ) {
+    this.unsubscribeDocuments = documents.onChange((change) => this.documentChanged(change));
     port.onClose?.(() => this.dispose());
     port.listen((message) => {
       if (this.disposed) return;
@@ -209,6 +214,7 @@ export class PluginHost {
       tokens: new Map(),
       requests: new Map(),
       commands: new Map(),
+      documents: new Map(),
     };
     this.running.set(id, entry);
     worker.listen(
@@ -379,11 +385,32 @@ export class PluginHost {
             typeof args.name !== "string"
           )
             throw new Error("Invalid document request");
-          const key = `moxi:doc:${id}:${args.name}`;
-          if (message.op === "doc.read") {
-            const raw = this.documents.getItem(key);
-            value = raw ? JSON.parse(raw) : null;
-          } else if ("value" in args) this.documents.setItem(key, JSON.stringify(args.value));
+          const ref: DocumentRef = { plugin: id, scope: "global", account: null, name: args.name };
+          try {
+            if (message.op === "doc.read") {
+              const stored = await this.documents.read(ref);
+              if (stored) this.documentChanged({ ref, ...stored });
+              value = r.documents.get(ref.name)?.value ?? null;
+            } else if ("value" in args) {
+              if (!r.documents.has(ref.name)) {
+                const stored = await this.documents.read(ref);
+                if (stored) this.documentChanged({ ref, ...stored });
+              }
+              const result = await this.documents.write({
+                ref,
+                value: jsonValue.assert(args.value),
+                expectedRevision: r.documents.get(ref.name)?.revision ?? 0,
+              });
+              if (!result.ok) {
+                const current = await this.documents.read(ref);
+                if (current) this.documentChanged({ ref, ...current });
+                this.log(`${p.manifest.name}: the document changed in another session`, "refused");
+              }
+            }
+          } catch {
+            this.log(`${p.manifest.name}: the document could not be saved or read`, "error");
+            value = null;
+          }
         } else if (message.op === "toast") {
           const args = message.args;
           if (
@@ -407,6 +434,14 @@ export class PluginHost {
       }
     }
     if (message.t !== "pong") this.changed();
+  }
+
+  private documentChanged(change: DocumentChange) {
+    if (this.disposed || change.ref.scope !== "global") return;
+    const documents = this.running.get(change.ref.plugin)?.documents;
+    if (!documents || change.revision < (documents.get(change.ref.name)?.revision ?? 0)) return;
+    documents.set(change.ref.name, { value: change.value, revision: change.revision });
+    this.send(change.ref.plugin, { t: "doc", name: change.ref.name, value: change.value });
   }
 
   private async runCommand(id: string, commandId: string): Promise<string | null> {
@@ -479,6 +514,7 @@ export class PluginHost {
     this.hubOpen = false;
     this.hubSession++;
     this.queryGen++;
+    this.unsubscribeDocuments();
     clearInterval(this.watchdog);
     for (const timer of this.timers) clearTimeout(timer);
     for (const id of this.running.keys()) this.stopPlugin(id);

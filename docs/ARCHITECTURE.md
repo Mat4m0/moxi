@@ -40,6 +40,8 @@ Main (Node, apps/desktop)
   sockets and secrets.
 - Renderers run with `contextIsolation`, `sandbox: true`, no Node. Each window
   kind gets one preload that exposes only its channels.
+- The plugin host uses its own persistent browser partition. Its `moxi` handler
+  serves only plugin-host assets and bundled plugins, never game or launcher files.
 - No plugin code runs in a game renderer. The plugin host talks to each game
   renderer over a `MessagePort` that Main hands out. Its messages are defined
   once in `@moxi/sdk/host`, which both renderers may import.
@@ -94,7 +96,9 @@ other Main code is plain Node, so Vitest runs it without Electron.
   default in code. An invalid stored value is logged and read as the default;
   nothing quarantines a whole file.
 - Plugin documents are rows `(plugin, scope, account, name) → json, revision`.
-  Main serializes writes and broadcasts changes.
+  Main validates plugin-host-only document channels, serializes revision-checked
+  writes and broadcasts copied values to plugin sessions. Stale writes are refused.
+  Plugin documents never use browser storage.
 - Credentials are stored with `safeStorage`. On Linux, saving is refused when
   the backend is `basic_text`.
 
@@ -153,10 +157,17 @@ See `packages/sdk/README.md` for the contract. The host rules:
 - A plugin is a manifest (`plugin.json`) plus one ES module. The host reads the
   manifest without running code; commands, scopes and settings are visible
   before the plugin starts.
-- Each enabled plugin runs in its own module Worker in the plugin host, one per
-  game window, so account-scoped state never mixes. Its
-  render functions return UI nodes; the host renders them. Plugins never touch
-  the DOM, Node, game memory, input or the network outside declared hosts.
+- Main supplies bundled manifests and scripts through a plugin-host-only channel.
+  Each enabled plugin runs in its own opaque-origin `data:` module Worker, one
+  per game window. Workers cannot use IndexedDB or Cache Storage. The plugin-host
+  policy allows only `data:` workers and denies network connections. Plugins
+  return UI nodes; the host renders them. Plugins never touch
+  the DOM, Node, game memory, input or the network. Declared-host network access
+  is not implemented yet.
+- Development uses the same partition, opaque workers and document channels.
+  The Vite host page has the same policy, so its HMR connection is blocked;
+  reload the plugin host after editing it. The browser-only Hub harness has no
+  Electron partition or production CSP and uses in-memory documents.
 - Facts are pushed per permission at 10–20 Hz. A game action needs the
   permission and one activation token from a click or key press on that
   plugin's UI (3 s, single use). Multi-step flows are host actions.

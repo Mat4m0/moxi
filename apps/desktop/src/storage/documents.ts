@@ -1,17 +1,8 @@
 import { type } from "arktype";
 import type { Database } from "./database";
 
-const reference = type({ plugin: "string", scope: "'global'", account: "null", name: "string" }).or(
-  {
-    plugin: "string",
-    scope: "'account'",
-    account: "string > 0",
-    name: "string",
-  },
-);
-export type DocumentRef = typeof reference.infer;
-const jsonValue = type("object.json | string | number | boolean | null");
-export type Json = typeof jsonValue.infer;
+import { documentRef as reference, jsonValue, type DocumentRef, type Json } from "@moxi/contracts";
+export type { DocumentRef, Json } from "@moxi/contracts";
 const documentRow = type({ json: "string", revision: "number.integer > 0" });
 export interface DocumentChange {
   ref: DocumentRef;

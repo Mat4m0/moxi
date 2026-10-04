@@ -1,7 +1,11 @@
 import type { HubToHost, ToHost } from "@moxi/sdk/host";
+import type { DocumentChange, DocumentRef, ResponseOf } from "@moxi/contracts";
 import { PluginHost } from "../plugin-host.ts";
 
 const channel = new MessageChannel();
+const documents = new Map<string, NonNullable<ResponseOf<"plugin.doc.read">>>();
+const listeners = new Set<(change: DocumentChange) => void>();
+const key = (ref: DocumentRef) => JSON.stringify(ref);
 const host = new PluginHost(
   {
     post: (message) => channel.port1.postMessage(message),
@@ -21,7 +25,23 @@ const host = new PluginHost(
       terminate: () => worker.terminate(),
     };
   },
-  localStorage,
+  {
+    read: (ref) => Promise.resolve(documents.get(key(ref)) ?? null),
+    write: async ({ ref, value, expectedRevision }) => {
+      const revision = documents.get(key(ref))?.revision ?? 0;
+      if (revision !== expectedRevision) return { ok: false, revision };
+      const stored = { value, revision: revision + 1 };
+      documents.set(key(ref), stored);
+      for (const listener of listeners) listener({ ref, ...stored });
+      return { ok: true, revision: stored.revision };
+    },
+    onChange: (listener) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  },
 );
 window.postMessage({ t: "moxi-hub-port" }, location.origin, [channel.port2]);
 window.addEventListener(
@@ -48,5 +68,10 @@ for (const entry of index) {
   )
     throw new Error("Invalid plugin index entry");
   const manifest: unknown = await (await fetch(entry.manifest)).json();
-  host.register(manifest, entry.script, entry.bytes);
+  const source = await (await fetch(entry.script)).text();
+  host.register(
+    manifest,
+    `data:text/javascript;charset=utf-8,${encodeURIComponent(source)}`,
+    entry.bytes,
+  );
 }

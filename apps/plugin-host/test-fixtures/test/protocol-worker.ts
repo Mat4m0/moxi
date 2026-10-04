@@ -50,6 +50,14 @@ port.on("message", (message: ToPlugin) => {
         post({ t: "commandDone", opId: delayedView.opId });
         delayedView = undefined;
       }
+      if (message.id === "doc-read" || message.id === "doc-write")
+        post({
+          t: "request",
+          reqId: ++reqId,
+          op: message.id === "doc-read" ? "doc.read" : "doc.write",
+          args: { name: "notes", value: { text: "saved" } },
+          activation: null,
+        });
       if (message.id === "capture") token = message.activation;
       if (message.id === "use")
         post({
@@ -64,6 +72,13 @@ port.on("message", (message: ToPlugin) => {
       break;
     case "result":
       post({ t: "items", items: items(JSON.stringify(message.value)) });
+      break;
+    case "doc":
+      post({
+        t: "hud",
+        id: "document",
+        node: { type: "text", text: JSON.stringify(message.value) },
+      });
       break;
     case "query":
       if (message.text === "old") {

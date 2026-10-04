@@ -5,7 +5,10 @@
   "type": "module",
   "main": "dist/main.mjs",
   "exports": {
-    "./game-files": "./src/game-files/index.ts"
+    "./game-files": "./src/game-files/index.ts",
+    "./plugin-documents": "./src/plugin-documents.ts",
+    "./storage": "./src/storage/index.ts",
+    "./plugin-isolation": "./src/plugin-isolation.ts"
   },
   "dependencies": {
     "@moxi/contracts": "workspace:*",

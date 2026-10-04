@@ -1,0 +1,10 @@
+{
+  "id": "test.isolation",
+  "name": "Isolation probe",
+  "version": "1.0.0",
+  "api": 1,
+  "description": "Tests plugin storage and network isolation in fixture builds.",
+  "permissions": [],
+  "activation": ["game"],
+  "commands": []
+}

@@ -20,7 +20,7 @@ export const windowChannels = {
     "game.dns",
     "game.net.healthy",
   ],
-  pluginHost: [],
+  pluginHost: ["plugin.doc.read", "plugin.doc.write", "plugin.bundles"],
 } as const;
 export type WindowKind = keyof typeof windowChannels;
 

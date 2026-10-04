@@ -1,6 +1,41 @@
 import { expect, test } from "vite-plus/test";
 import { validateRequest, type WindowKind, type ChannelName } from "./index.js";
 const denied: [ChannelName, WindowKind | undefined, unknown][] = [
+  [
+    "plugin.doc.read",
+    "launcher",
+    { plugin: "notes", scope: "global", account: null, name: "build" },
+  ],
+  [
+    "plugin.doc.write",
+    "game",
+    {
+      ref: { plugin: "notes", scope: "global", account: null, name: "build" },
+      value: "saved",
+      expectedRevision: 0,
+    },
+  ],
+  ["plugin.bundles", "game", undefined],
+  [
+    "plugin.doc.read",
+    "pluginHost",
+    { plugin: "notes", scope: "account", account: null, name: "build" },
+  ],
+  [
+    "plugin.doc.read",
+    "pluginHost",
+    { plugin: "notes", scope: "global", account: "alice", name: "build" },
+  ],
+  [
+    "plugin.doc.write",
+    "pluginHost",
+    {
+      ref: { plugin: "notes", scope: "global", account: null, name: "build" },
+      value: "saved",
+      expectedRevision: -1,
+    },
+  ],
+
   ["download.pause", "game", undefined],
   ["download.pause", "pluginHost", undefined],
   ["download.resume", "game", undefined],

@@ -3,6 +3,8 @@ import { afterEach, beforeEach, expect, test, vi } from "vite-plus/test";
 import { MessageChannel, Worker } from "node:worker_threads";
 import { DatabaseSync } from "node:sqlite";
 import type { HostToHub, HubToHost, ToHost } from "@moxi/sdk/host";
+import { createPluginDocuments } from "@moxi/desktop/plugin-documents";
+import { migrations } from "@moxi/desktop/storage";
 import { PluginHost } from "./plugin-host.ts";
 
 const cleanup: (() => void)[] = [];
@@ -19,10 +21,12 @@ afterEach(() => {
 function harness(
   permissions = ["game.travel"],
   scheduleFrame = (callback: () => void) => callback(),
+  sharedDocuments?: ReturnType<typeof createPluginDocuments>,
 ) {
   const channel = new MessageChannel();
   const db = new DatabaseSync(":memory:");
-  db.exec("CREATE TABLE documents (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+  for (const migration of migrations) db.exec(migration.sql);
+  const documents = sharedDocuments ?? createPluginDocuments(db);
   let terminated = 0;
   const messages: HostToHub[] = [];
   let signal: (() => void) | undefined;
@@ -53,13 +57,9 @@ function harness(
       };
     },
     {
-      getItem: (key) => {
-        const row = db.prepare("SELECT value FROM documents WHERE key = ?").get(key);
-        return typeof row?.value === "string" ? row.value : null;
-      },
-      setItem: (key, value) => {
-        db.prepare("INSERT OR REPLACE INTO documents VALUES (?, ?)").run(key, value);
-      },
+      read: async (ref) => documents.read(ref),
+      write: async (request) => documents.write(request),
+      onChange: (listener) => documents.onChange(listener),
     },
     scheduleFrame,
   );
@@ -101,7 +101,7 @@ function harness(
     await until(() => messages.some((m) => m.t === "commandResult" && m.requestId === id));
   }
   send({ t: "openHub" });
-  return { host, messages, send, until, command, channel, terminated: () => terminated };
+  return { documents, host, messages, send, until, command, channel, terminated: () => terminated };
 }
 
 test.each([
@@ -326,4 +326,33 @@ test("100 plugin updates share one snapshot per frame without leaking worker cod
   frames.shift()!();
   await h.until(() => h.messages.filter((message) => message.t === "state").length === 2);
   expect(h.messages.filter((message) => message.t === "state")).toHaveLength(2);
+});
+
+test("plugin documents round-trip through the document port and receive changes without browser storage", async () => {
+  const h = harness();
+  const second = harness([], undefined, h.documents);
+  await h.command("doc-read");
+  await second.command("doc-read");
+  await h.until(() => h.host.state.plugins["test.protocol"]!.items[0]?.title === "null");
+  await second.until(() => second.host.state.plugins["test.protocol"]!.items[0]?.title === "null");
+  await h.command("doc-write");
+  await h.until(() => h.host.state.plugins["test.protocol"]!.hud.document?.type === "text");
+  await second.until(
+    () => second.host.state.plugins["test.protocol"]!.hud.document?.type === "text",
+  );
+  expect(second.host.state.plugins["test.protocol"]!.hud.document).toEqual({
+    type: "text",
+    text: '{"text":"saved"}',
+  });
+  expect(
+    h.documents.read({ plugin: "test.protocol", scope: "global", account: null, name: "notes" }),
+  ).toEqual({ value: { text: "saved" }, revision: 1 });
+  await h.command("doc-read");
+  await h.until(
+    () => h.host.state.plugins["test.protocol"]!.items[0]?.title === '{"text":"saved"}',
+  );
+  expect(h.host.state.plugins["test.protocol"]!.hud.document).toEqual({
+    type: "text",
+    text: '{"text":"saved"}',
+  });
 });
