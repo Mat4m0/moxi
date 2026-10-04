@@ -105,13 +105,13 @@ test("accepts a late ack after close while refusing foreign socket operations", 
   expect(network.hasConnected(10)).toBe(true);
   expect(() => network.write(20, 7, new Uint8Array([9]))).toThrow("does not own");
   expect(() => network.close(20, 7)).toThrow("does not own");
-  expect(() => network.ack(20, 7, 1)).toThrow("does not own");
+  expect(network.ack(20, 7, 1)).toBeUndefined();
   network.write(10, 7, new Uint8Array([1, 2, 3]));
   await data;
   network.close(10, 7);
   await close;
   expect(() => network.ack(10, 7, 3)).not.toThrow();
-  expect(() => network.ack(20, 7, 3)).toThrow("does not own");
+  expect(network.ack(20, 7, 3)).toBeUndefined();
   network.closeWindow(10);
   expect(events).toEqual([
     { id: 7, kind: "open" },
@@ -145,3 +145,26 @@ test("closes a connection when a write exceeds the buffer bound", async () => {
   expect(() => network.write(1, 1, new Uint8Array(BUFFER_LIMIT + 1))).toThrow("buffer limit");
   await closed;
 });
+
+test("10,000 reconnects do not retain sockets and unknown or late acknowledgements are no-ops", async () => {
+  const destination = await echoServer();
+  let closed: () => void = () => {};
+  const network = createGameNetwork(
+    (_owner, event) => {
+      if (event.kind === "close") closed();
+    },
+    (host, port) => `${host}:${port}` === destination,
+  );
+  cleanup.push(() => network.closeWindow(1));
+  expect(network.ack(1, 10001, 1)).toBeUndefined();
+  for (let id = 1; id <= 10000; id++) {
+    const close = new Promise<void>((done) => {
+      closed = done;
+    });
+    network.connect(1, id, destination);
+    network.close(1, id);
+    await close;
+    expect(network.socketCount(1)).toBe(0);
+    expect(network.ack(1, id, 1)).toBeUndefined();
+  }
+}, 60_000);
