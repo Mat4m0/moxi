@@ -51,7 +51,7 @@ function start(command: string, args: string[], cwd = root, env = process.env) {
   return child;
 }
 function signal(child: ChildProcess, signal: NodeJS.Signals) {
-  if (!child.pid) return;
+  if (!child.pid || child.exitCode !== null || child.signalCode !== null) return;
   try {
     if (process.platform === "win32") {
       const killer = spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
@@ -60,13 +60,22 @@ function signal(child: ChildProcess, signal: NodeJS.Signals) {
       killer.on("error", (error) => console.error("[dev] Could not stop child tree", error));
     } else process.kill(-child.pid, signal);
   } catch (error) {
-    if (!(error instanceof Error && "code" in error && error.code === "ESRCH")) throw error;
+    if (error instanceof Error && "code" in error && error.code === "ESRCH") return;
+    console.warn("[dev] Could not signal child tree", error);
+    try {
+      child.kill(signal);
+    } catch (error) {
+      console.warn("[dev] Could not signal child", error);
+    }
   }
 }
 async function stop(child: ChildProcess) {
   if (child.exitCode !== null || child.signalCode !== null) return;
   await new Promise<void>((done) => {
-    const deadline = setTimeout(() => signal(child, "SIGKILL"), 3000);
+    const deadline = setTimeout(() => {
+      signal(child, "SIGKILL");
+      done();
+    }, 3000);
     child.once("exit", () => {
       clearTimeout(deadline);
       done();
@@ -126,6 +135,9 @@ async function launch() {
     if (electron) await stop(electron);
     if (!stopping) {
       electron = start(String(electronBinary), [resolve(root, "apps/desktop")], root, env);
+      electron.on("exit", (code) => {
+        if (!stopping && !restarting) void shutdown(code ?? 1);
+      });
       console.log(`[dev] Electron started (PID ${electron.pid}), CDP 127.0.0.1:${port}`);
     }
   } finally {
