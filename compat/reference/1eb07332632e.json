@@ -1,0 +1,190 @@
+{
+  "client": "484f7f20691c912c372b7e265a1cc4a4d26b37bfbd52c838b3137d5f29b67d3b",
+  "roles": {
+    ".hookFunction": {
+      "index": 446,
+      "fingerprint": "5afa1OCs80GqnwVO"
+    },
+    "playerSkillbarObservation.worldLifecycle.functionIndex": {
+      "index": 8812,
+      "fingerprint": "qk+GZMDdLSG0h1fM"
+    },
+    "playerSkillbarObservation.update.functionIndex": {
+      "index": 8698,
+      "fingerprint": "XTQ3SxygTwdu1dAC"
+    },
+    "playerSkillbarObservation.rowReader.functionIndex": {
+      "index": 8701,
+      "fingerprint": "ZT91ljPbzMK3L57P"
+    },
+    "playerSkillbarObservation.slotReader.functionIndex": {
+      "index": 8702,
+      "fingerprint": "BXWibres8ip/9SxK"
+    },
+    "cursorEvent.functionIndex": {
+      "index": 2469,
+      "fingerprint": "u9WV7fMiNRIusTpx"
+    },
+    "cursorEvent.producerFunctions[0]": {
+      "index": 2828,
+      "fingerprint": "O+WHA3LRaoviBUfz"
+    },
+    "cursorEvent.producerFunctions[1]": {
+      "index": 2834,
+      "fingerprint": "JwLMIRC2MFFjnjhQ"
+    },
+    "uiDispatcher.functionIndex": {
+      "index": 6842,
+      "fingerprint": "OPrYrHMlS7QcYBgS"
+    },
+    "accessProof.readers.?.functionIndex[0]": {
+      "index": 8939,
+      "fingerprint": "4VPwuWcppHnYOeyo"
+    },
+    "accessProof.readers.?.functionIndex[1]": {
+      "index": 9196,
+      "fingerprint": "tn8FyfGndzq/OFMt"
+    },
+    "accessProof.readers.?.functionIndex[2]": {
+      "index": 9205,
+      "fingerprint": "ywNUQU/HKE1bq9pT"
+    },
+    "xunlaiAction.handler.functionIndex": {
+      "index": 8978,
+      "fingerprint": "9JRMCrXrPrBvOuqX"
+    },
+    "travelAction.guildHall.keyAccessor.functionIndex": {
+      "index": 7960,
+      "fingerprint": "yLnfu1TeCEInUpWc"
+    },
+    "travelAction.guildHall.areaTypeAccessor.functionIndex": {
+      "index": 9531,
+      "fingerprint": "RqsN/hfTSMRukD2h"
+    },
+    "travelAction.guildHall.producer.functionIndex": {
+      "index": 15462,
+      "fingerprint": "Mj+87m3PoHxoa8Yb"
+    },
+    "travelAction.unlockProof.accessor.functionIndex": {
+      "index": 9184,
+      "fingerprint": "m2NkLVCJv/RL/rWz"
+    },
+    "travelAction.unlockProof.consumer.functionIndex": {
+      "index": 15984,
+      "fingerprint": "n3tACFC8k15pkFfO"
+    },
+    "travelAction.producer.functionIndex": {
+      "index": 16199,
+      "fingerprint": "AJAYd2It2xIqxj8W"
+    },
+    "travelAction.contextResolver.functionIndex": {
+      "index": 11650,
+      "fingerprint": "jFX5xRmSLt5t+r1d"
+    },
+    "chatAliases.parser.functionIndex": {
+      "index": 13709,
+      "fingerprint": "N2J5z98q2B1iekO6"
+    },
+    "chatFiltering.producer.functionIndex": {
+      "index": 7880,
+      "fingerprint": "gFnlbTJ3qmdNOc4m"
+    },
+    "gameThread.drain.functionIndex": {
+      "index": 6661,
+      "fingerprint": "iplEjOQKDxM7ufxu"
+    },
+    "teamApply.professionTrace.sender.functionIndex": {
+      "index": 5951,
+      "fingerprint": "RAEspnT76eHNryTK"
+    },
+    "teamApply.entries.functionIndex": {
+      "index": 6887,
+      "fingerprint": "F5Pq6riwNpm1PL01"
+    },
+    "teamApply.label.functionIndex[0]": {
+      "index": 6886,
+      "fingerprint": "G5+l2mkXnBRf/9j6"
+    },
+    "teamApply.label.functionIndex[1]": {
+      "index": 6878,
+      "fingerprint": "zPW7aXFRmas/dzbl"
+    },
+    "teamApply.label.functionIndex[2]": {
+      "index": 6943,
+      "fingerprint": "+7uCKQ4Aa00lfSJ2"
+    },
+    "teamApply.label.functionIndex[3]": {
+      "index": 6917,
+      "fingerprint": "b2WEItirBdKfSxEg"
+    },
+    "teamApply.label.functionIndex[4]": {
+      "index": 6873,
+      "fingerprint": "836mkCk5rhbp05VD"
+    },
+    "teamApply.label.functionIndex[5]": {
+      "index": 10650,
+      "fingerprint": "0+CiNcowOD04NCtV"
+    },
+    "skillSlotGeometry.initializer.functionIndex": {
+      "index": 15750,
+      "fingerprint": "87E9ttLO+PiNjYFw"
+    },
+    "skillSlotGeometry.constructor.functionIndex": {
+      "index": 6676,
+      "fingerprint": "STW1sLv3sXVPAyGY"
+    },
+    "preGameControls.characterSwitchAction.frameChild.functionIndex": {
+      "index": 6796,
+      "fingerprint": "mNu7WOQXX1yW8QSg"
+    },
+    "preGameControls.characterSwitchAction.frameParent.functionIndex": {
+      "index": 6797,
+      "fingerprint": "rAT9lxx3Dib5gEOu"
+    },
+    "preGameControls.characterSwitchAction.frameResolver.functionIndex": {
+      "index": 6534,
+      "fingerprint": "Gf0RK3WNmF2n0Hbh"
+    },
+    "preGameControls.characterSwitchAction.frameDispatch.functionIndex": {
+      "index": 6508,
+      "fingerprint": "G824itYVIExMzw1F"
+    },
+    "preGameControls.characterSwitchAction.logoutProducer.functionIndex": {
+      "index": 12434,
+      "fingerprint": "AlQEzmGGkdICBgrv"
+    },
+    "preGameControls.hashFunction.functionIndex": {
+      "index": 365,
+      "fingerprint": "BqeZKcBm0ZK+U4Yc"
+    },
+    "quickItemMove.inventorySlot.functionIndex": {
+      "index": 14956,
+      "fingerprint": "lBOhJjDRb5xQChBS"
+    },
+    "quickItemMove.materialStorageSlot.functionIndex": {
+      "index": 14994,
+      "fingerprint": "OvE/gunaegM7UNbH"
+    },
+    "quickItemMove.numberPreference.functionIndex": {
+      "index": 10807,
+      "fingerprint": "VnAs5PnvyloYJiUM"
+    },
+    "quickItemMove.timer.functionIndex": {
+      "index": 249,
+      "fingerprint": "k3CJ4leI4RSOxzpo"
+    },
+    "quickItemMove.moveItem.functionIndex": {
+      "index": 13640,
+      "fingerprint": "O9e+zKgHTmD9aXz0"
+    },
+    "skillCooldownObservation.reader.functionIndex": {
+      "index": 8704,
+      "fingerprint": "a9hX5ePAIATKrEGj"
+    },
+    "skillCooldownObservation.timer.functionIndex": {
+      "index": 249,
+      "fingerprint": "k3CJ4leI4RSOxzpo"
+    }
+  },
+  "values": {}
+}

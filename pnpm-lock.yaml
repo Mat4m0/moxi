@@ -105,6 +105,10 @@ importers:
         version: 2.2.7
 
   packages/gwkit:
+    dependencies:
+      arktype:
+        specifier: 2.2.7
+        version: 2.2.7
     devDependencies:
       '@types/node':
         specifier: 24.19.1

@@ -1,0 +1,140 @@
+{
+  ".hookFunction": {
+    "signature": "i32->",
+  },
+  "playerSkillbarObservation.worldLifecycle.functionIndex": {
+    "signature": "i32->i32",
+  },
+  "playerSkillbarObservation.update.functionIndex": {
+    "signature": "->",
+  },
+  "playerSkillbarObservation.rowReader.functionIndex": {
+    "signature": "i32,i32,i32->i32",
+  },
+  "playerSkillbarObservation.slotReader.functionIndex": {
+    "signature": "i32,i32,i32->i32",
+  },
+  "cursorEvent.functionIndex": {
+    "signature": "i32,i32,i32,i32,i32->",
+  },
+  "cursorEvent.producerFunctions[0]": {
+    "signature": "i32,i32->i32",
+  },
+  "cursorEvent.producerFunctions[1]": {
+    "signature": "i32,i32->i32",
+  },
+  "uiDispatcher.functionIndex": {
+    "signature": "i32,i32,i32->",
+  },
+  "accessProof.readers.?.functionIndex[0]": {
+    "signature": "i32->i32",
+  },
+  "accessProof.readers.?.functionIndex[1]": {
+    "signature": "i32->i32",
+  },
+  "accessProof.readers.?.functionIndex[2]": {
+    "signature": "i32->i32",
+  },
+  "xunlaiAction.handler.functionIndex": {
+    "signature": "i32->",
+  },
+  "travelAction.guildHall.keyAccessor.functionIndex": {
+    "signature": "->i32",
+  },
+  "travelAction.guildHall.areaTypeAccessor.functionIndex": {
+    "signature": "->i32",
+  },
+  "travelAction.guildHall.producer.functionIndex": {
+    "signature": "i32,i32->",
+  },
+  "travelAction.unlockProof.accessor.functionIndex": {
+    "signature": "->i32",
+  },
+  "travelAction.unlockProof.consumer.functionIndex": {
+    "signature": "i32->i32",
+  },
+  "travelAction.producer.functionIndex": {
+    "signature": "i32,i32->",
+  },
+  "travelAction.contextResolver.functionIndex": {
+    "signature": "i32,i32,i32->",
+  },
+  "chatAliases.parser.functionIndex": {
+    "signature": "i32,i32->i32",
+  },
+  "chatFiltering.producer.functionIndex": {
+    "signature": "i32,i32->",
+  },
+  "gameThread.drain.functionIndex": {
+    "signature": "i32,i32->",
+  },
+  "teamApply.professionTrace.sender.functionIndex": {
+    "signature": "i32,i32,i32->",
+  },
+  "teamApply.entries.functionIndex": {
+    "signature": "i32->",
+  },
+  "teamApply.label.functionIndex[0]": {
+    "signature": "i32->",
+  },
+  "teamApply.label.functionIndex[1]": {
+    "signature": "i32,i32->",
+  },
+  "teamApply.label.functionIndex[2]": {
+    "signature": "i32,i32,i32->",
+  },
+  "teamApply.label.functionIndex[3]": {
+    "signature": "i32,i32->",
+  },
+  "teamApply.label.functionIndex[4]": {
+    "signature": "i32,i32,i32,i32->",
+  },
+  "teamApply.label.functionIndex[5]": {
+    "signature": "i32->",
+  },
+  "skillSlotGeometry.initializer.functionIndex": {
+    "signature": "i32,i32->",
+  },
+  "skillSlotGeometry.constructor.functionIndex": {
+    "signature": "i32,i32,i32,i32,i32,i32->i32",
+  },
+  "preGameControls.characterSwitchAction.frameChild.functionIndex": {
+    "signature": "i32,i32->i32",
+  },
+  "preGameControls.characterSwitchAction.frameParent.functionIndex": {
+    "signature": "i32->i32",
+  },
+  "preGameControls.characterSwitchAction.frameResolver.functionIndex": {
+    "signature": "i32->i32",
+  },
+  "preGameControls.characterSwitchAction.frameDispatch.functionIndex": {
+    "signature": "i32,i32,i32,i32->",
+  },
+  "preGameControls.characterSwitchAction.logoutProducer.functionIndex": {
+    "signature": "i32,i32,i32->",
+  },
+  "preGameControls.hashFunction.functionIndex": {
+    "signature": "i32,i32->i32",
+  },
+  "quickItemMove.inventorySlot.functionIndex": {
+    "signature": "i32,i32,i32->",
+  },
+  "quickItemMove.materialStorageSlot.functionIndex": {
+    "signature": "i32,i32,i32->",
+  },
+  "quickItemMove.numberPreference.functionIndex": {
+    "signature": "i32->i32",
+  },
+  "quickItemMove.timer.functionIndex": {
+    "signature": "->i32",
+  },
+  "quickItemMove.moveItem.functionIndex": {
+    "signature": "i32,i32,i32,i32->",
+  },
+  "skillCooldownObservation.reader.functionIndex": {
+    "signature": "i32,i32,i32->i32",
+  },
+  "skillCooldownObservation.timer.functionIndex": {
+    "signature": "->i32",
+  },
+}

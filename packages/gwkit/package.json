@@ -5,6 +5,9 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "dependencies": {
+    "arktype": "2.2.7"
+  },
   "devDependencies": {
     "@types/node": "24.19.1",
     "wabt": "1.0.39"

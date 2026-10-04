@@ -15,3 +15,7 @@ export { callGraph } from "./wasm/graph";
 export { WasmError } from "./wasm/reader";
 export { fingerprint, exactBodyHash } from "./match/fingerprint";
 export { matchBuilds } from "./match/match";
+export { loadRoleSpecs, loadLocator } from "./locate/specs";
+export type { RoleSpecs, Locator } from "./locate/specs";
+export { locate } from "./locate/locate";
+export type { Refusal } from "./locate/locate";
