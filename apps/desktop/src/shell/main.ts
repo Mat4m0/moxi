@@ -8,6 +8,7 @@ import { resolveFolders } from "../folders.js";
 import { resolveRendererPath } from "../protocol-path.js";
 import type { WindowKind } from "@moxi/contracts";
 import { handle } from "./ipc.js";
+import { createClientRoutes } from "./client.js";
 
 const repoRoot = resolve(import.meta.dirname, "../../..");
 const identity = resolveIdentity(app.isPackaged);
@@ -45,14 +46,16 @@ if (!app.isPackaged && process.env.MOXI_CDP_PORT) {
 const windows = new Map<number, { kind: WindowKind; window: BrowserWindow }>();
 let launcher: BrowserWindow | undefined;
 let game: BrowserWindow | undefined;
+let client = createClientRoutes(folders.gameCache);
 const csp =
-  "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; worker-src 'self' blob:; connect-src 'self'";
+  "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-9MCtU6XOFDHSPMY3TZr+AvM3Q5P34oe/aBUYK5SY1Es='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; worker-src 'self' blob:; connect-src 'self'";
 const roots = {
   launcher: join(repoRoot, "apps/launcher/dist"),
   game: join(repoRoot, "apps/game/dist"),
   "plugin-host": join(repoRoot, "apps/plugin-host/dist"),
 };
 function createWindow(kind: WindowKind) {
+  if (kind === "game") client = createClientRoutes(folders.gameCache);
   const win = new BrowserWindow({
     width: 960,
     height: 640,
@@ -80,7 +83,7 @@ function createWindow(kind: WindowKind) {
   const route = kind === "pluginHost" ? "plugin-host" : kind;
   const devUrl = !app.isPackaged ? process.env[`MOXI_${kind.toUpperCase()}_URL`] : undefined;
   void win
-    .loadURL(devUrl ?? `moxi://app/${route}/`)
+    .loadURL(kind === "game" ? "moxi://app/game/" : (devUrl ?? `moxi://app/${route}/`))
     .catch((error: unknown) => console.error("[moxi] Window could not load", error));
   return win;
 }
@@ -116,6 +119,27 @@ else {
           (permission === "pointerLock" || permission === "fullscreen"),
       );
       protocol.handle("moxi", async (request) => {
+        const clientResponse = await client.handle(request);
+        if (clientResponse) {
+          clientResponse.headers.set("Content-Security-Policy", csp);
+          return clientResponse;
+        }
+        const url = new URL(request.url);
+        if (
+          request.method === "GET" &&
+          url.host === "app" &&
+          !app.isPackaged &&
+          process.env.MOXI_GAME_URL &&
+          ["/game/", "/src/", "/@vite/", "/@fs/", "/@id/", "/node_modules/"].some((prefix) =>
+            url.pathname.startsWith(prefix),
+          )
+        ) {
+          const path = url.pathname.startsWith("/game/")
+            ? url.pathname.slice("/game".length)
+            : url.pathname;
+          const upstream = new URL(path + url.search, process.env.MOXI_GAME_URL);
+          return net.fetch(upstream.href);
+        }
         const file = resolveRendererPath(request.url, roots);
         if (!file || request.method !== "GET")
           return new Response("Not found", {
@@ -135,6 +159,7 @@ else {
         }
       });
       const windowKind = (id: number) => windows.get(id)?.kind;
+      handle("game.client", () => client.info(), windowKind);
       handle(
         "app.info",
         () => ({

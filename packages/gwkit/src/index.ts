@@ -19,3 +19,5 @@ export { loadRoleSpecs, loadLocator } from "./locate/specs";
 export type { RoleSpecs, Locator } from "./locate/specs";
 export { locate } from "./locate/locate";
 export type { Refusal } from "./locate/locate";
+export { createRuntime } from "./runtime";
+export type { Runtime } from "./runtime";

@@ -3,6 +3,9 @@ import { validateRequest, type WindowKind, type ChannelName } from "./index.js";
 const denied: [ChannelName, WindowKind | undefined, unknown][] = [
   ["game.open", "game", undefined],
   ["app.info", "pluginHost", undefined],
+  ["game.client", "launcher", undefined],
+  ["game.client", "pluginHost", undefined],
+  ["game.client", "game", {}],
   ["game.open", undefined, undefined],
   ["app.info", "launcher", {}],
 ];
@@ -16,6 +19,7 @@ test.each([
   ["app.info", "launcher"],
   ["game.open", "launcher"],
   ["app.info", "game"],
+  ["game.client", "game"],
 ] as const)("allows the window's declared actions (%s, %s)", (name, kind) => {
   expect(validateRequest(name, kind, undefined)).toBe(undefined);
 });

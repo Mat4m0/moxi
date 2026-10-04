@@ -19,6 +19,10 @@ export const channels = {
       channel: "'dev' | 'beta' | 'stable'",
     }),
   }),
+  "game.client": defineChannel({
+    request: type("undefined"),
+    response: type({ generationToken: "string.uuid", snapshotSize: "number.safe > 0" }),
+  }),
   "game.open": defineChannel({ request: type("undefined"), response: type("undefined") }),
 };
 import { windowChannels, type WindowKind } from "./windows.js";
