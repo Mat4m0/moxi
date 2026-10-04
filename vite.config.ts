@@ -36,7 +36,14 @@ function imports(allowed: string[], otherPackages: string[], sdkTypesOnly = fals
   } satisfies OxlintOverride["rules"];
 }
 
-const desktopImports = ["@moxi/contracts", "@moxi/gwkit", "arktype", "node:*", ...builtinModules];
+const desktopImports = [
+  "@moxi/contracts",
+  "@moxi/gwkit",
+  "arktype",
+  "node:*",
+  "node:*/*",
+  ...builtinModules,
+];
 const rendererPackages = ["desktop", "launcher", "game", "plugin-host"];
 
 export default defineConfig({
