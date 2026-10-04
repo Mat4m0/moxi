@@ -8,43 +8,34 @@ type GameSocket = {
   close(): void;
 };
 
-export function createSocketHost(
-  bridge: Bridge<"game">,
-  onSafePoint: (callback: () => void) => () => void,
-  opened: () => void,
-) {
+// Events are delivered as they arrive, like WebSocket events: the client may
+// wait for network data inside a frame, so gating them on frame ends deadlocks.
+export function createSocketHost(bridge: Bridge<"game">, opened: () => void) {
   const sockets = new Map<number, { socket: GameSocket; open: boolean; closing: boolean }>();
-  let events: SocketEvent[] = [];
   let nextId = 0;
   let disposed = false;
-  const unsubscribe = bridge.onSocketEvent((event) => {
-    if (sockets.has(event.id)) events.push(event);
-  });
-  const stop = onSafePoint(() => {
-    const pending = events;
-    events = [];
-    for (const event of pending) {
-      const entry = sockets.get(event.id);
-      if (!entry) continue;
-      if (event.kind === "close") {
-        sockets.delete(event.id);
-        entry.socket.onclose?.();
-      } else if (event.kind === "open") {
-        if (entry.closing) continue;
-        entry.open = true;
-        opened();
-        entry.socket.onopen?.();
-      } else if (event.kind === "data") {
-        try {
-          if (!entry.closing) entry.socket.onmessage?.(event.bytes);
-        } finally {
-          void bridge
-            .invoke("game.net.ack", { id: event.id, bytes: event.bytes.length })
-            .catch(() => entry.socket.close());
-        }
+  function deliver(event: SocketEvent) {
+    const entry = sockets.get(event.id);
+    if (!entry) return;
+    if (event.kind === "close") {
+      sockets.delete(event.id);
+      entry.socket.onclose?.();
+    } else if (event.kind === "open") {
+      if (entry.closing) return;
+      entry.open = true;
+      opened();
+      entry.socket.onopen?.();
+    } else if (event.kind === "data") {
+      try {
+        if (!entry.closing) entry.socket.onmessage?.(event.bytes);
+      } finally {
+        void bridge
+          .invoke("game.net.ack", { id: event.id, bytes: event.bytes.length })
+          .catch(() => entry.socket.close());
       }
     }
-  });
+  }
+  const unsubscribe = bridge.onSocketEvent(deliver);
   return {
     socket: {
       connect(destination: string): GameSocket {
@@ -70,7 +61,7 @@ export function createSocketHost(
               if (entry.closing) return;
               entry.closing = true;
               void bridge.invoke("game.net.close", { id }).catch(() => {
-                events.push({ id, kind: "close" });
+                deliver({ id, kind: "close" });
               });
             },
           } satisfies GameSocket,
@@ -80,7 +71,7 @@ export function createSocketHost(
         if (disposed) throw new Error("Game network has stopped.");
         sockets.set(id, entry);
         void bridge.invoke("game.net.connect", { id, destination }).catch(() => {
-          events.push({ id, kind: "close" });
+          deliver({ id, kind: "close" });
         });
         return entry.socket;
       },
@@ -88,10 +79,8 @@ export function createSocketHost(
     dispose() {
       disposed = true;
       unsubscribe();
-      stop();
       for (const entry of sockets.values()) entry.socket.close();
       sockets.clear();
-      events = [];
     },
   };
 }

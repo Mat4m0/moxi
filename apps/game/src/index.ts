@@ -53,17 +53,13 @@ async function boot() {
   const game = createRuntime();
   runtime = game;
   let confirmed = false;
-  network = createSocketHost(
-    window.moxi,
-    (callback) => game.onSafePoint(callback),
-    () => {
-      if (confirmed) return;
-      confirmed = true;
-      void window.moxi
-        .invoke("game.net.healthy", client.generationToken)
-        .catch(() => console.warn("[moxi] Client health could not be confirmed."));
-    },
-  );
+  network = createSocketHost(window.moxi, () => {
+    if (confirmed) return;
+    confirmed = true;
+    void window.moxi
+      .invoke("game.net.healthy", client.generationToken)
+      .catch(() => console.warn("[moxi] Client health could not be confirmed."));
+  });
   globalThis.Module = {
     canvas,
     preRun() {

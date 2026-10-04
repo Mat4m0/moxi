@@ -83,7 +83,9 @@ function createWindow(kind: WindowKind) {
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
-      backgroundThrottling: kind !== "pluginHost",
+      // The client advances its main loop, including network delivery, on
+      // animation frames; plugins must keep answering while the game is busy.
+      backgroundThrottling: kind === "launcher",
       webSecurity: true,
     },
   });
