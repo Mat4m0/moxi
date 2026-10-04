@@ -1,6 +1,10 @@
-export { GameFileError } from "./errors";
-export type { GameFileErrorCode } from "./errors";
-export { parseManifest } from "./manifest";
-export type { Manifest, ManifestFile } from "./manifest";
-export { createChunkStore } from "./store";
-export type { ChunkStore, ChunkStoreOptions } from "./store";
+export { GameFileError } from "./errors.ts";
+export type { GameFileErrorCode } from "./errors.ts";
+export { parseManifest } from "./manifest.ts";
+export type { Manifest, ManifestFile } from "./manifest.ts";
+export { createChunkStore } from "./store.ts";
+export type { ChunkStore, ChunkStoreOptions } from "./store.ts";
+export { createPatchTransport, PATCH_ROOT } from "./transport.ts";
+export { confirmHealthy, stageCandidate, parseGenerations } from "./generations.ts";
+export type { Generations } from "./generations.ts";
+export { createClientCache } from "./client.ts";

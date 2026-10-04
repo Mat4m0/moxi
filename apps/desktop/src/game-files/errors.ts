@@ -20,12 +20,10 @@ export type GameFileErrorCode =
   | "bad_range";
 
 export class GameFileError extends Error {
-  constructor(
-    readonly code: GameFileErrorCode,
-    message: string,
-    options?: ErrorOptions,
-  ) {
+  readonly code: GameFileErrorCode;
+  constructor(code: GameFileErrorCode, message: string, options?: ErrorOptions) {
     super(message, options);
+    this.code = code;
     this.name = "GameFileError";
   }
 }

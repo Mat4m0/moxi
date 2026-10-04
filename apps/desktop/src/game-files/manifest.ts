@@ -1,7 +1,7 @@
 import { type } from "arktype";
-import { contentHash, MAX_CHUNK_SIZE } from "./chunks";
-import type { Compression } from "./chunks";
-import { GameFileError } from "./errors";
+import { contentHash, MAX_CHUNK_SIZE } from "./chunks.ts";
+import type { Compression } from "./chunks.ts";
+import { GameFileError } from "./errors.ts";
 
 const rawManifest = type({
   compressionMode: "unknown",

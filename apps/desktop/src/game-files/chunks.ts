@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { gunzip } from "node:zlib";
-import { GameFileError } from "./errors";
+import { GameFileError } from "./errors.ts";
 
 export const MAX_CHUNK_SIZE = 16 * 1024 * 1024;
 export type Compression = "none" | "gzip";

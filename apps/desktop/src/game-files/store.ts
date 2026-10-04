@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, open, readdir, rename, unlink } from "node:fs/promises";
 import { join } from "node:path";
-import { chunkLength, contentHash, decode, verify } from "./chunks";
-import type { Compression } from "./chunks";
-import { GameFileError } from "./errors";
-import type { ManifestFile } from "./manifest";
+import { chunkLength, contentHash, decode, verify } from "./chunks.ts";
+import type { Compression } from "./chunks.ts";
+import { GameFileError } from "./errors.ts";
+import type { ManifestFile } from "./manifest.ts";
 
 export interface ChunkStoreOptions {
   dir: string;

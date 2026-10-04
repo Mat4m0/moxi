@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 import { afterEach, describe, expect, it } from "vite-plus/test";
-import { createChunkStore, GameFileError, parseManifest } from "./index";
-import type { ManifestFile } from "./index";
+import { createChunkStore, GameFileError, parseManifest } from "./index.ts";
+import type { ManifestFile } from "./index.ts";
 
 const hash = (bytes: Uint8Array, algorithm = "sha256") =>
   createHash(algorithm).update(bytes).digest("hex");

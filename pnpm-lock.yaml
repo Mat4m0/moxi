@@ -11,6 +11,9 @@ importers:
 
   .:
     devDependencies:
+      '@moxi/desktop':
+        specifier: workspace:*
+        version: link:apps/desktop
       typescript:
         specifier: 5.9.3
         version: 5.9.3

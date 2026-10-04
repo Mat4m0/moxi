@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "main": "dist/main.mjs",
+  "exports": {
+    "./game-files": "./src/game-files/index.ts"
+  },
   "dependencies": {
     "@moxi/contracts": "workspace:*",
     "@moxi/gwkit": "workspace:*",
