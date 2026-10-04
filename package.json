@@ -20,6 +20,7 @@
   "devDependencies": {
     "@electron/fuses": "2.1.2",
     "@moxi/desktop": "workspace:*",
+    "@moxi/fixture-client": "workspace:*",
     "@playwright/test": "1.63.0",
     "@types/node": "24.19.1",
     "@vitejs/plugin-vue": "6.0.9",

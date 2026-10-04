@@ -6,7 +6,7 @@ import { resolve, join } from "node:path";
 import { createRequire } from "node:module";
 import { createServer } from "node:net";
 import { expect, test } from "@playwright/test";
-import { seedOfflineClient } from "./client-cache.ts";
+import { seedFixtureClient } from "@moxi/fixture-client";
 
 const root = resolve(import.meta.dirname, "..");
 const appPath = resolve(root, "apps/desktop");
@@ -74,7 +74,7 @@ test("shell keeps one launcher, rejects launcher actions from the game, and quit
 }, testInfo) => {
   const data = await mkdtemp(join(tmpdir(), "moxi-e2e-"));
   const env = await environment(data);
-  await seedOfflineClient(env.MOXI_GAME_CACHE!).catch(async (error: unknown) => {
+  await seedFixtureClient(env.MOXI_GAME_CACHE!).catch(async (error: unknown) => {
     await rm(data, { recursive: true, force: true });
     throw error;
   });
@@ -98,6 +98,13 @@ test("shell keeps one launcher, rejects launcher actions from the game, and quit
     console.log(`pnpm drive ${args.join(" ")} — exit 0\n${result.stdout.trim()}`);
     return result;
   };
+  const frames: number[] = [];
+  application.on("window", (page) => {
+    page.on("console", (message) => {
+      const match = /^\[gwkit\] frames=(\d+)$/.exec(message.text());
+      if (match) frames.push(Number(match[1]));
+    });
+  });
   try {
     await expect
       .poll(() =>
@@ -146,13 +153,23 @@ test("shell keeps one launcher, rejects launcher actions from the game, and quit
     });
     const game = application.windows().find((page) => page.url() === "moxi://app/game/");
     if (!game) throw new Error("Game did not open");
-    await test.step("Hub works above the unavailable client and closes with Escape", async () => {
-      await expect(game.getByRole("status")).toHaveText(
-        "The game client could not start. Run fetch-client and restart Moxi.",
-      );
+    await test.step("Hub works above the running fixture client and closes with Escape", async () => {
+      await expect(game.getByRole("status")).toBeHidden();
+      await expect.poll(() => frames.filter((frame) => frame > 0).length).toBeGreaterThanOrEqual(2);
+      expect(frames.at(-1)!).toBeGreaterThan(frames.find((frame) => frame > 0)!);
+      console.log(`Fixture gwkit frames: ${frames.join(" → ")}`);
+      expect(
+        await game
+          .getByLabel("Guild Wars")
+          .evaluate((canvas: HTMLCanvasElement) =>
+            Array.from(canvas.getContext("2d")!.getImageData(0, 0, 1, 1).data),
+          ),
+      ).toEqual([16, 32, 48, 255]);
+      await game.screenshot({ path: resolve(root, ".evidence/f3/fixture-game.png") });
       await game.screenshot({ path: resolve(root, ".evidence/g1/game-before.png") });
       await game.keyboard.press(process.platform === "darwin" ? "Meta+r" : "Control+r");
       await expect(game.getByRole("dialog", { name: "Hub", exact: true })).toBeVisible();
+      await game.screenshot({ path: resolve(root, ".evidence/f3/fixture-hub.png") });
       await expect(game.locator("html")).toHaveAttribute("data-ui-style", "obsidian");
       await game.screenshot({ path: resolve(root, ".evidence/g1/hub-modern.png") });
       await launcher.getByRole("combobox", { name: /^Panel style/ }).selectOption("classic");

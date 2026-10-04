@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   confirmHealthy,
@@ -8,20 +8,20 @@ import {
   stageCandidate,
 } from "@moxi/desktop/game-files";
 
-export async function seedOfflineClient(dir: string) {
+export async function seedFixtureClient(dir: string) {
   const generationToken = randomUUID();
   const cache = createClientCache(dir);
   const directory = cache.directory(generationToken);
   const files = [
-    { name: "Gw.jspi.js", bytes: Buffer.from("Module.instantiateWasm({}, () => {});") },
-    { name: "Gw.jspi.wasm", bytes: Buffer.from([0, 1, 2, 3]) },
+    { name: "Gw.jspi.js", bytes: await readFile(new URL("./glue.js", import.meta.url)) },
+    { name: "Gw.jspi.wasm", bytes: await readFile(new URL("./client.wasm", import.meta.url)) },
     { name: "Gw.snapshot", bytes: Buffer.from([4, 5, 6, 7]) },
     { name: "version.json", bytes: Buffer.from("{}") },
   ];
   const manifest = Buffer.from(
     JSON.stringify({
       compressionMode: "none",
-      chunkSize: 128,
+      chunkSize: 65536,
       files: files.map(({ name, bytes }) => ({
         name,
         size: bytes.length,

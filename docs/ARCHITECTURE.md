@@ -178,7 +178,7 @@ items, views and actions; they never implement keys or focus.
 | gwkit | decoder, matcher, patcher, readers | Vitest on synthetic modules; corpus lane over cached ArenaNet builds when `MOXI_CORPUS` is set |
 | Plugins | behavior through `@moxi/sdk/testing` | Vitest (Node) |
 | Hub shell | interaction rules once for all features | Vitest browser mode |
-| End to end | ~10 journeys against the fake game client | Playwright Electron |
+| End to end | journeys against the fixture client, including startup and live gwkit frames | Playwright Electron |
 
 Mock only ArenaNet, the clock and external HTTP. No test reads source text.
 One regression test per bug fix.

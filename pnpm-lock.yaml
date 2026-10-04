@@ -17,6 +17,9 @@ importers:
       '@moxi/desktop':
         specifier: workspace:*
         version: link:apps/desktop
+      '@moxi/fixture-client':
+        specifier: workspace:*
+        version: link:tools/fixture-client
       '@playwright/test':
         specifier: 1.63.0
         version: 1.63.0
@@ -164,6 +167,15 @@ importers:
       '@moxi/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
+
+  tools/fixture-client:
+    devDependencies:
+      '@moxi/desktop':
+        specifier: workspace:*
+        version: link:../../apps/desktop
+      '@types/node':
+        specifier: 24.19.1
+        version: 24.19.1
 
 packages:
 

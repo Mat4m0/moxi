@@ -1,6 +1,7 @@
+import { seedFixtureClient } from "@moxi/fixture-client";
 import { spawn, type ChildProcess } from "node:child_process";
 import { watch } from "node:fs";
-import { access, mkdir, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
@@ -12,6 +13,14 @@ await new Promise<void>((done, reject) => {
 });
 
 const root = resolve(import.meta.dirname, "..");
+await mkdir(resolve(root, ".data"), { recursive: true });
+const fixtureCache = process.argv.includes("--fixture")
+  ? await mkdtemp(resolve(root, ".data/fixture-"))
+  : undefined;
+if (fixtureCache) {
+  await seedFixtureClient(fixtureCache);
+  console.log("[dev] Fixture client active (no ArenaNet, no login)");
+}
 const children = new Set<ChildProcess>();
 let stopping = false;
 let electron: ChildProcess | undefined;
@@ -71,6 +80,7 @@ async function shutdown(code: number) {
   clearTimeout(timer);
   watcher.close();
   await Promise.all([...children].map(stop));
+  if (fixtureCache) await rm(fixtureCache, { recursive: true, force: true });
   process.exit(code);
 }
 let ready = false;
@@ -96,6 +106,9 @@ const port = await (async () => {
 })();
 const env = {
   ...process.env,
+  ...(fixtureCache
+    ? { MOXI_GAME_CACHE: fixtureCache, MOXI_PATCH_ROOT: "http://127.0.0.1:4699" }
+    : {}),
   MOXI_CDP_PORT: String(port),
   MOXI_LAUNCHER_URL: "http://127.0.0.1:4611",
   MOXI_GAME_URL: "http://127.0.0.1:4612",
