@@ -37,6 +37,7 @@ export function createGameNetwork(
     Map<number, { socket: Socket; incoming: number; outgoing: number; reason: string }>
   >();
   const connected = new Set<number>();
+  const closed = new Map<number, Set<number>>();
   function owned(owner: number, id: number) {
     const entry = owners.get(owner)?.get(id);
     if (!entry) throw new Error("This window does not own that socket.");
@@ -53,6 +54,7 @@ export function createGameNetwork(
       owners.set(owner, sockets);
       const socket = new Socket();
       const entry = { socket, incoming: 0, outgoing: 0, reason: "remote" };
+      closed.get(owner)?.delete(id);
       sockets.set(id, entry);
       console.info(`[net] connect ${host}:${port}`);
       socket.on("connect", () => {
@@ -78,6 +80,11 @@ export function createGameNetwork(
         socket.destroy();
       });
       socket.on("close", () => {
+        if (owners.get(owner) === sockets) {
+          const ids = closed.get(owner) ?? new Set<number>();
+          ids.add(id);
+          closed.set(owner, ids);
+        }
         sockets.delete(id);
         if (!sockets.size && owners.get(owner) === sockets) owners.delete(owner);
         console.info(`[net] close ${host}:${port} ${entry.reason}`);
@@ -104,6 +111,7 @@ export function createGameNetwork(
       return undefined;
     },
     ack(owner: number, id: number, bytes: number) {
+      if (closed.get(owner)?.has(id)) return undefined;
       const entry = owned(owner, id);
       if (bytes !== entry.incoming) throw new Error("Invalid game buffer acknowledgement.");
       entry.incoming = 0;
@@ -123,6 +131,7 @@ export function createGameNetwork(
       }
       owners.delete(owner);
       connected.delete(owner);
+      closed.delete(owner);
     },
     hasConnected: (owner: number) => connected.has(owner),
     async resolve(name: string) {

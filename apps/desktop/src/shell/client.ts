@@ -32,7 +32,8 @@ export function createClientRoutes(dir: string, fetchResponse: typeof fetch = fe
   let client: ReturnType<typeof openClient> | undefined;
   const current = () => (client ??= openClient());
   return {
-    async confirmHealthy(token: string) {
+    async confirmHealthy(token: string, connected: boolean) {
+      if (!connected) throw new Error("Game session is not connected.");
       if (token !== (await current()).generationToken)
         throw new Error("Stale client generation token.");
       await cache.confirmHealthy(token);

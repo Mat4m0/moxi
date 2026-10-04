@@ -96,11 +96,18 @@ test("does not expose arbitrary cache files through the client protocol", async 
   }
 });
 
-test("confirms only the session generation and promotes its verified client", async () => {
+test("refuses unconnected or foreign health and accepts repeated health without promoting twice", async () => {
   const routes = await cache();
   await routes.info();
-  await expect(routes.confirmHealthy(second)).rejects.toThrow("Stale client generation token.");
-  await routes.confirmHealthy(first);
+  await expect(routes.confirmHealthy(second, true)).rejects.toThrow(
+    "Stale client generation token.",
+  );
+  await expect(routes.confirmHealthy(first, false)).rejects.toThrow(
+    "Game session is not connected.",
+  );
+  await routes.confirmHealthy(first, true);
+  await routes.confirmHealthy(first, true);
+  await createClientRoutes(dir).confirmHealthy(first, true);
   expect(JSON.parse(await readFile(join(dir, "generations.json"), "utf8"))).toEqual({
     active: first,
     candidate: null,

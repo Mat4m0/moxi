@@ -67,7 +67,7 @@ test("refuses destinations and DNS names before opening network traffic", async 
   await expect(network.resolve("example.com")).rejects.toThrow("refused");
 });
 
-test("echoes bytes over the event bridge and prevents another window from writing or closing", async () => {
+test("accepts a late ack after close while refusing foreign socket operations", async () => {
   const destination = await echoServer();
   const events: SocketEvent[] = [];
   let resolveOpen: () => void = () => {};
@@ -96,6 +96,8 @@ test("echoes bytes over the event bridge and prevents another window from writin
     (host, port) => host === "127.0.0.1" && port === 4600,
   );
   cleanup.push(() => network.closeWindow(10));
+  expect(network.hasConnected(10)).toBe(false);
+  expect(network.hasConnected(20)).toBe(false);
   network.connect(10, 7, destination);
   await open;
   expect(network.hasConnected(10)).toBe(true);
@@ -104,8 +106,11 @@ test("echoes bytes over the event bridge and prevents another window from writin
   expect(() => network.ack(20, 7, 1)).toThrow("does not own");
   network.write(10, 7, new Uint8Array([1, 2, 3]));
   await data;
-  network.closeWindow(10);
+  network.close(10, 7);
   await close;
+  expect(() => network.ack(10, 7, 3)).not.toThrow();
+  expect(() => network.ack(20, 7, 3)).toThrow("does not own");
+  network.closeWindow(10);
   expect(events).toEqual([
     { id: 7, kind: "open" },
     { id: 7, kind: "data", bytes: new Uint8Array([1, 2, 3]) },

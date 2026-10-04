@@ -237,6 +237,7 @@ export function createClientCache(dir: string, fetchResponse: typeof fetch = fet
     confirmHealthy: (generationToken: string) =>
       locked(async () => {
         const old = await state();
+        if (old.active === generationToken && old.candidate === null) return old;
         const next = confirmHealthy(old, generationToken);
         const manifest = parseManifest(
           await readFile(join(generationsDir, generationToken, "manifest.json")),

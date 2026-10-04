@@ -230,9 +230,9 @@ else {
         "game.net.healthy",
         async (token, owner) => {
           const session = sessions.get(owner);
-          if (!session || session.token !== token || !network.hasConnected(owner))
+          if (!session || session.token !== token)
             throw new Error("Game session is not connected.");
-          await session.client.confirmHealthy(token);
+          await session.client.confirmHealthy(token, network.hasConnected(owner));
           return undefined;
         },
         windowKind,
