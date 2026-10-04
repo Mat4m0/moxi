@@ -10,18 +10,21 @@
     "ui": "vp dev --config packages/ui/vite.config.ts",
     "dev": "node scripts/dev.ts",
     "build": "pnpm --filter @moxi/launcher exec vp build && pnpm --filter @moxi/game exec vp build && pnpm --filter @moxi/plugin-host exec vp build && pnpm --filter @moxi/desktop exec vp pack && node scripts/build-plugins.ts --bundled",
+    "package": "pnpm build && electron-builder --config electron-builder.config.ts --publish never",
     "fetch-client": "node scripts/fetch-client.ts",
     "drive": "node scripts/drive.ts",
     "e2e": "pnpm build && playwright test",
     "hub": "node scripts/build-plugins.ts && vp dev --config apps/game/src/hub/dev/vite.config.ts"
   },
   "devDependencies": {
+    "@electron/fuses": "2.1.2",
     "@moxi/desktop": "workspace:*",
     "@playwright/test": "1.63.0",
     "@types/node": "24.19.1",
     "@vitejs/plugin-vue": "6.0.9",
     "@vitest/browser-playwright": "5.0.1",
     "electron": "44.5.1",
+    "electron-builder": "26.15.3",
     "typescript": "5.9.3",
     "vite-plus": "1.0.0"
   },

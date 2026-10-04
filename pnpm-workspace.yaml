@@ -6,5 +6,8 @@ packages:
 
 minimumReleaseAge: 1440
 
+allowBuilds:
+  electron-winstaller: false
+
 overrides:
   vite: npm:@voidzero-dev/vite-plus-core@1.0.0

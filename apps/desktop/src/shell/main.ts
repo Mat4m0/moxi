@@ -53,9 +53,15 @@ let client = createClientRoutes(folders.gameCache);
 const csp =
   "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; worker-src 'self' blob:; connect-src 'self'";
 const roots = {
-  launcher: join(repoRoot, "apps/launcher/dist"),
-  game: join(repoRoot, "apps/game/dist"),
-  "plugin-host": join(repoRoot, "apps/plugin-host/dist"),
+  launcher: app.isPackaged
+    ? join(app.getAppPath(), "renderers/launcher")
+    : join(repoRoot, "apps/launcher/dist"),
+  game: app.isPackaged
+    ? join(app.getAppPath(), "renderers/game")
+    : join(repoRoot, "apps/game/dist"),
+  "plugin-host": app.isPackaged
+    ? join(app.getAppPath(), "renderers/plugin-host")
+    : join(repoRoot, "apps/plugin-host/dist"),
 };
 function createWindow(kind: WindowKind) {
   if (kind === "game") client = createClientRoutes(folders.gameCache);
@@ -104,6 +110,9 @@ function createWindow(kind: WindowKind) {
   const devUrl = !app.isPackaged ? process.env[`MOXI_${kind.toUpperCase()}_URL`] : undefined;
   void win
     .loadURL(kind === "game" ? "moxi://app/game/" : (devUrl ?? `moxi://app/${route}/`))
+    .then(() => {
+      if (kind === "launcher") console.log(`[moxi] launcher loaded ${win.webContents.getURL()}`);
+    })
     .catch((error: unknown) => console.error("[moxi] Window could not load", error));
   return win;
 }
