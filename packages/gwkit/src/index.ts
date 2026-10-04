@@ -13,3 +13,5 @@ export { decodeBody } from "./wasm/decode";
 export type { Instruction } from "./wasm/decode";
 export { callGraph } from "./wasm/graph";
 export { WasmError } from "./wasm/reader";
+export { fingerprint, exactBodyHash } from "./match/fingerprint";
+export { matchBuilds } from "./match/match";
