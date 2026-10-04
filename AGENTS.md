@@ -44,6 +44,23 @@ pnpm drive <step>       # agents: drive the running Dev app (screens, keys, scre
 5. Credentials exist only in Main (`safeStorage`); never in logs, renderers,
    plugins, diagnostics or test output.
 
+## Live game sessions (agents)
+
+Agents never engage in economy or combat. Within that, test as much as
+possible live through the `moxi-dev` MCP server; Main refuses everything else.
+
+- Allowed: login, characters, relog, reload; all launcher, Hub and HUD UI;
+  opening and reading every game window (inventory, storage, heroes, skills,
+  map, quests, guild, friends, party); moving own items between bags and
+  storage; travel between outposts, towns and the Guild Hall; applying builds
+  and teams; adding or removing heroes and henchmen; reading every fact.
+- Never: explorable areas, missions, PvP, skills or attacks; trading,
+  merchants, traders, crafters, salvaging; dropping, using or giving away
+  items or gold; chat, whispers, emotes or invites to players; guild changes;
+  free clicks or keys on the game canvas.
+- Never read the Dev login file (`~/.config/moxi-dev/login.env`) or print
+  its values. Keep sessions short and at a human pace; player input always wins.
+
 ## Code
 
 - Simplest correct code. Prefer delete > simplify > replace > add. No
