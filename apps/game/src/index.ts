@@ -41,8 +41,15 @@ const canvas = element;
 const message = status;
 let runtime: ReturnType<typeof createRuntime> | undefined;
 let network: ReturnType<typeof createSocketHost> | undefined;
+let clientToken: string | undefined;
+let sessionEnded = false;
 let frameLog: ReturnType<typeof setInterval> | undefined;
 function fail(text: string) {
+  sessionEnded = true;
+  if (clientToken)
+    void window.moxi
+      .invoke("game.client.failed", clientToken)
+      .catch(() => console.warn("[moxi] Client failure could not be reported."));
   message.hidden = false;
   message.textContent = text;
   clearInterval(frameLog);
@@ -50,16 +57,28 @@ function fail(text: string) {
 
 async function boot() {
   const client = await window.moxi.invoke("game.client", undefined);
+  clientToken = client.generationToken;
   const game = createRuntime();
   runtime = game;
   let confirmed = false;
-  network = createSocketHost(window.moxi, () => {
-    if (confirmed) return;
-    confirmed = true;
+  let pending = false;
+  let lastAttempt = -Infinity;
+  function reportHealth() {
+    if (sessionEnded || confirmed || pending || Date.now() - lastAttempt < 1000) return;
+    lastAttempt = Date.now();
+    pending = true;
     void window.moxi
-      .invoke("game.net.healthy", client.generationToken)
-      .catch(() => console.warn("[moxi] Client health could not be confirmed."));
-  });
+      .invoke("game.net.healthy", { token: client.generationToken, frame: game.frames() > 0 })
+      .then((healthy) => {
+        confirmed = healthy;
+      })
+      .catch(() => console.warn("[moxi] Client health could not be confirmed."))
+      .finally(() => {
+        pending = false;
+      });
+  }
+  game.onSafePoint(reportHealth);
+  network = createSocketHost(window.moxi, reportHealth);
   globalThis.Module = {
     canvas,
     preRun() {
@@ -110,6 +129,7 @@ async function boot() {
 window.addEventListener(
   "pagehide",
   () => {
+    sessionEnded = true;
     clearInterval(frameLog);
     network?.dispose();
     runtime?.dispose();

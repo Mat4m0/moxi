@@ -2,11 +2,13 @@ import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, expect, test } from "vite-plus/test";
+import { afterEach, expect, test, vi } from "vite-plus/test";
+import { createClientCache } from "../game-files/client";
 import { createClientRoutes } from "./client";
 
 let dir: string;
 afterEach(async () => {
+  vi.useRealTimers();
   if (dir) await rm(dir, { recursive: true, force: true });
 });
 const first = "00000000-0000-4000-8000-000000000001";
@@ -99,18 +101,130 @@ test("does not expose arbitrary cache files through the client protocol", async 
 test("refuses unconnected or foreign health and accepts repeated health without promoting twice", async () => {
   const routes = await cache();
   await routes.info();
-  await expect(routes.confirmHealthy(second, true)).rejects.toThrow(
+  await expect(routes.confirmHealthy(second, true, true)).rejects.toThrow(
     "Stale client generation token.",
   );
-  await expect(routes.confirmHealthy(first, false)).rejects.toThrow(
-    "Game session is not connected.",
-  );
-  await routes.confirmHealthy(first, true);
-  await routes.confirmHealthy(first, true);
-  await createClientRoutes(dir).confirmHealthy(first, true);
+  expect(await routes.confirmHealthy(first, false, true)).toBe(false);
+  await routes.confirmHealthy(first, true, true);
+  await routes.confirmHealthy(first, true, true);
+  await createClientRoutes(dir).confirmHealthy(first, true, true);
   expect(JSON.parse(await readFile(join(dir, "generations.json"), "utf8"))).toEqual({
     active: first,
     candidate: null,
     previous: null,
+    failed: null,
+  });
+});
+
+test("serves a downloaded update instead of ignoring it and retains the healthy client on promotion", async () => {
+  await cache();
+  await writeFile(
+    join(dir, "generations.json"),
+    JSON.stringify({ active: first, candidate: second, previous: null }),
+  );
+  const routes = createClientRoutes(dir);
+  expect((await routes.info()).generationToken).toBe(second);
+  expect(await (await routes.handle(new Request("moxi://app/client/Gw.jspi.js")))?.text()).toBe(
+    "new",
+  );
+  expect(await routes.confirmHealthy(second, true, true)).toBe(true);
+  expect(await createClientCache(dir).state()).toEqual({
+    active: second,
+    candidate: null,
+    previous: first,
+    failed: null,
+  });
+});
+
+test("does not promote a connected client before it rendered a frame", async () => {
+  const routes = await cache();
+  expect(await routes.confirmHealthy(first, true, false)).toBe(false);
+  expect(await createClientCache(dir).state()).toEqual({
+    active: null,
+    candidate: first,
+    previous: null,
+    failed: null,
+  });
+  expect(await routes.confirmHealthy(first, true, true)).toBe(true);
+  expect(await createClientCache(dir).state()).toEqual({
+    active: first,
+    candidate: null,
+    previous: null,
+    failed: null,
+  });
+});
+
+test("retries a locked confirmation on a later frame without retrying more than once per second", async () => {
+  vi.useFakeTimers();
+  const routes = await cache();
+  await mkdir(join(dir, ".generation-lock"));
+  await writeFile(join(dir, ".generation-lock", String(process.pid)), "");
+  await expect(routes.confirmHealthy(first, true, true)).rejects.toThrow("busy");
+  await rm(join(dir, ".generation-lock"), { recursive: true });
+  expect(await routes.confirmHealthy(first, true, true)).toBe(false);
+  vi.advanceTimersByTime(1000);
+  expect(await routes.confirmHealthy(first, true, true)).toBe(true);
+  expect(await createClientCache(dir).state()).toEqual({
+    active: first,
+    candidate: null,
+    previous: null,
+    failed: null,
+  });
+});
+
+test.each([
+  ["crash", 0, true, false, true],
+  ["boot error", 0, false, true, true],
+  ["unconfirmed minute", 60000, false, false, true],
+  ["short close", 59999, false, false, false],
+] as const)(
+  "falls back only after a failed candidate session: %s",
+  async (_name, elapsed, crashed, bootError, failed) => {
+    vi.useFakeTimers();
+    await cache();
+    await writeFile(
+      join(dir, "generations.json"),
+      JSON.stringify({ active: first, candidate: second, previous: null }),
+    );
+    const routes = createClientRoutes(dir);
+    await routes.info();
+    if (bootError) routes.reportFailure();
+    vi.advanceTimersByTime(elapsed);
+    await routes.end(crashed);
+    expect(await createClientCache(dir).state()).toEqual(
+      failed
+        ? { active: first, candidate: null, previous: null, failed: second }
+        : { active: first, candidate: second, previous: null, failed: null },
+    );
+    expect((await createClientRoutes(dir).info()).generationToken).toBe(failed ? first : second);
+    expect(await routes.confirmHealthy(second, true, true)).toBe(false);
+  },
+);
+
+test("does not boot a failed first install again when there is no healthy fallback", async () => {
+  const routes = await cache();
+  await routes.info();
+  routes.reportFailure();
+  expect(await routes.end()).toBe(true);
+  expect(await createClientCache(dir).state()).toEqual({
+    active: null,
+    candidate: null,
+    previous: null,
+    failed: first,
+  });
+  await expect(createClientRoutes(dir).info()).rejects.toThrow(
+    "Download the game client before playing.",
+  );
+});
+
+test("retains a frame reported before connection and promotes only after Main sees connection", async () => {
+  const routes = await cache();
+  expect(await routes.confirmHealthy(first, false, true)).toBe(false);
+  expect(await routes.confirmHealthy(first, true, false)).toBe(true);
+  expect(await createClientCache(dir).state()).toEqual({
+    active: first,
+    candidate: null,
+    previous: null,
+    failed: null,
   });
 });

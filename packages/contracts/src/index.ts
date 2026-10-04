@@ -97,7 +97,14 @@ export const channels = {
     response: type("undefined"),
   }),
   "game.dns": defineChannel({ request: type("string <= 253"), response: type("string") }),
-  "game.net.healthy": defineChannel({ request: type("string.uuid"), response: type("undefined") }),
+  "game.net.healthy": defineChannel({
+    request: type({ token: "string.uuid", frame: "boolean" }),
+    response: type("boolean"),
+  }),
+  "game.client.failed": defineChannel({
+    request: type("string.uuid"),
+    response: type("undefined"),
+  }),
   "app.info": defineChannel({
     request: type("undefined"),
     response: type({

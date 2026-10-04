@@ -19,6 +19,7 @@ export const windowChannels = {
     "game.net.ack",
     "game.dns",
     "game.net.healthy",
+    "game.client.failed",
   ],
   pluginHost: ["plugin.doc.read", "plugin.doc.write", "plugin.bundles"],
 } as const;

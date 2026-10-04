@@ -61,7 +61,7 @@ export function createClientCache(dir: string, fetchResponse: typeof fetch = fet
       bytes = await readFile(statePath, "utf8");
     } catch (error) {
       if (error instanceof Error && "code" in error && error.code === "ENOENT")
-        return { active: null, candidate: null, previous: null };
+        return { active: null, candidate: null, previous: null, failed: null };
       throw error;
     }
     const json: unknown = JSON.parse(bytes);
@@ -120,8 +120,8 @@ export function createClientCache(dir: string, fetchResponse: typeof fetch = fet
     }
   }
   async function discard(old: Generations, next: Generations) {
-    for (const id of [old.active, old.candidate, old.previous]) {
-      if (id && ![next.active, next.candidate, next.previous].includes(id))
+    for (const id of [old.active, old.candidate, old.previous, old.failed]) {
+      if (id && ![next.active, next.candidate, next.previous, next.failed].includes(id))
         await rm(join(generationsDir, id), { recursive: true, force: true });
     }
   }
@@ -169,7 +169,10 @@ export function createClientCache(dir: string, fetchResponse: typeof fetch = fet
     chunks,
     state,
     directory: (generationToken: string) => {
-      stageCandidate({ active: null, candidate: null, previous: null }, generationToken);
+      stageCandidate(
+        { active: null, candidate: null, previous: null, failed: null },
+        generationToken,
+      );
       return join(generationsDir, generationToken);
     },
     prepare: (progress?: (received: number, total: number) => void) =>
@@ -183,6 +186,17 @@ export function createClientCache(dir: string, fetchResponse: typeof fetch = fet
         progress?.(0, total);
         const store = chunks(manifest);
         const old = await state();
+        if (old.failed) {
+          const rejected = await readFile(join(generationsDir, old.failed, "manifest.json"));
+          if (rejected.equals(manifestBytes)) {
+            if (!old.active)
+              throw new Error("This client generation failed. Wait for a new client update.");
+            const healthy = parseManifest(
+              await readFile(join(generationsDir, old.active, "manifest.json")),
+            );
+            return verifyGeneration(old.active, healthy);
+          }
+        }
         const existing = old.candidate ?? old.active;
         if (existing) {
           try {
@@ -254,6 +268,15 @@ export function createClientCache(dir: string, fetchResponse: typeof fetch = fet
           await rm(stage, { recursive: true, force: true });
           if (!keepGeneration) await rm(destination, { recursive: true, force: true });
         }
+      }),
+    failCandidate: (generationToken: string) =>
+      locked(async () => {
+        const old = await state();
+        if (old.candidate !== generationToken) return old;
+        const next = { ...old, candidate: null, failed: generationToken };
+        await publish(next);
+        await discard(old, next);
+        return next;
       }),
     confirmHealthy: (generationToken: string) =>
       locked(async () => {

@@ -25,19 +25,19 @@ const third = "00000000-0000-4000-8000-000000000003";
 
 it.each([
   [
-    { active: null, candidate: first, previous: null },
+    { active: null, candidate: first, previous: null, failed: null },
     first,
-    { active: first, candidate: null, previous: null },
+    { active: first, candidate: null, previous: null, failed: null },
   ],
   [
-    { active: first, candidate: second, previous: null },
+    { active: first, candidate: second, previous: null, failed: null },
     second,
-    { active: second, candidate: null, previous: first },
+    { active: second, candidate: null, previous: first, failed: null },
   ],
   [
-    { active: second, candidate: third, previous: first },
+    { active: second, candidate: third, previous: first, failed: null },
     third,
-    { active: third, candidate: null, previous: second },
+    { active: third, candidate: null, previous: second, failed: null },
   ],
 ] satisfies Array<[Generations, string, Generations]>)(
   "retains the last healthy generation after confirmation (%j)",
@@ -47,9 +47,9 @@ it.each([
 );
 
 it.each([
-  [{ active: first, candidate: second, previous: null }, first],
-  [{ active: first, candidate: null, previous: null }, first],
-  [{ active: null, candidate: second, previous: null }, third],
+  [{ active: first, candidate: second, previous: null, failed: null }, first],
+  [{ active: first, candidate: null, previous: null, failed: null }, first],
+  [{ active: null, candidate: second, previous: null, failed: null }, third],
 ] satisfies Array<[Generations, string]>)(
   "rejects stale health proofs instead of promoting another client (%j)",
   (state, token) => {
@@ -60,13 +60,14 @@ it.each([
 it("keeps active and previous clients while replacing an unconfirmed candidate", () => {
   expect(
     stageCandidate(
-      { active: second, candidate: third, previous: first },
+      { active: second, candidate: third, previous: first, failed: null },
       "00000000-0000-4000-8000-000000000004",
     ),
   ).toEqual({
     active: second,
     candidate: "00000000-0000-4000-8000-000000000004",
     previous: first,
+    failed: null,
   });
 });
 
@@ -160,9 +161,15 @@ async function fixture(compression = "none", wrongBytes?: Uint8Array, stable = f
     (typeof url === "string" ? url : url instanceof URL ? url.href : url.url).endsWith(
       "manifest.json",
     )
-      ? new Response(manifest.slice(0, -1) + `,"build":${stable ? 0 : ++build}}`)
+      ? new Response(manifest.slice(0, -1) + `,"build":${stable ? build : ++build}}`)
       : new Response(Buffer.from(wrongBytes ?? bytes));
-  return { dir, cache: createClientCache(dir, http) };
+  return {
+    dir,
+    cache: createClientCache(dir, http),
+    nextManifest: () => {
+      build++;
+    },
+  };
 }
 
 it.each([
@@ -174,7 +181,12 @@ it.each([
     const { cache, dir } = await fixture(compression, bytes);
     await expect(cache.prepare()).rejects.toMatchObject({ code });
     expect(await readdir(join(dir, "generations"))).toEqual([]);
-    expect(await cache.state()).toEqual({ active: null, candidate: null, previous: null });
+    expect(await cache.state()).toEqual({
+      active: null,
+      candidate: null,
+      previous: null,
+      failed: null,
+    });
     expect(await readdir(dir)).not.toContain(".generation-lock");
   },
 );
@@ -190,6 +202,7 @@ it("keeps one previous directory after activation and rejects a stale session to
     active: null,
     candidate: a.generationToken,
     previous: null,
+    failed: null,
   });
   await cache.confirmHealthy(a.generationToken);
   const b = await cache.prepare();
@@ -199,6 +212,7 @@ it("keeps one previous directory after activation and rejects a stale session to
     active: b.generationToken,
     candidate: null,
     previous: a.generationToken,
+    failed: null,
   });
   expect(await readFile(join(cache.directory(a.generationToken), "Gw.jspi.js"))).toEqual(
     Buffer.from([1, 2, 3, 4]),
@@ -213,6 +227,7 @@ it("keeps one previous directory after activation and rejects a stale session to
     active: c.generationToken,
     candidate: null,
     previous: b.generationToken,
+    failed: null,
   });
 });
 
@@ -230,6 +245,7 @@ it("refuses to confirm a candidate whose official bytes changed on disk", async 
     active: null,
     candidate: candidate.generationToken,
     previous: null,
+    failed: null,
   });
 });
 
@@ -262,6 +278,7 @@ it("reuses a verified pending candidate so repeated preparation does not invalid
     active: first.generationToken,
     candidate: null,
     previous: null,
+    failed: null,
   });
 });
 
@@ -282,6 +299,7 @@ it("recovers a dead writer's lock so a terminated preparation does not block the
     active: null,
     candidate: candidate.generationToken,
     previous: null,
+    failed: null,
   });
   expect(await readdir(dir)).not.toContain(".generation-lock");
 });
@@ -293,7 +311,12 @@ it("refuses a competing writer without removing the live writer's lock", async (
   await writeFile(join(lock, String(process.pid)), "");
   await expect(cache.prepare()).rejects.toThrow("Client cache is busy");
   expect(await readdir(lock)).toEqual([String(process.pid)]);
-  expect(await cache.state()).toEqual({ active: null, candidate: null, previous: null });
+  expect(await cache.state()).toEqual({
+    active: null,
+    candidate: null,
+    previous: null,
+    failed: null,
+  });
 });
 
 it("reports artifact bytes monotonically without counting snapshot bytes", async () => {
@@ -313,3 +336,48 @@ it("reports artifact bytes monotonically without counting snapshot bytes", async
     [12, 12],
   ]);
 });
+
+it.each([false, true])(
+  "refuses to restage a failed manifest and accepts a different build (healthy fallback: %s)",
+  async (hasActive) => {
+    const { cache, dir, nextManifest } = await fixture("none", undefined, true);
+    let active: string | null = null;
+    if (hasActive) {
+      active = (await cache.prepare()).generationToken;
+      await cache.confirmHealthy(active);
+      nextManifest();
+    }
+    const bad = await cache.prepare();
+    await cache.failCandidate(bad.generationToken);
+    const reopened = createClientCache(dir);
+    expect(await reopened.state()).toEqual({
+      active,
+      candidate: null,
+      previous: null,
+      failed: bad.generationToken,
+    });
+    expect(() =>
+      stageCandidate(
+        { active, candidate: null, previous: null, failed: bad.generationToken },
+        bad.generationToken,
+      ),
+    ).toThrow("failed");
+    if (hasActive) expect((await cache.prepare()).generationToken).toBe(active);
+    else await expect(cache.prepare()).rejects.toThrow("failed");
+    expect(await cache.state()).toEqual({
+      active,
+      candidate: null,
+      previous: null,
+      failed: bad.generationToken,
+    });
+    nextManifest();
+    const next = await cache.prepare();
+    expect(next.generationToken).not.toBe(bad.generationToken);
+    expect(await cache.state()).toEqual({
+      active,
+      candidate: next.generationToken,
+      previous: null,
+      failed: null,
+    });
+  },
+);

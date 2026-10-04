@@ -160,6 +160,40 @@ function createWindow(kind: WindowKind) {
   }
   windows.set(win.webContents.id, { kind, window: win });
   const id = win.webContents.id;
+  if (kind === "game") {
+    let closing = false;
+    win.on("close", (event) => {
+      event.preventDefault();
+      if (closing) return;
+      closing = true;
+      void (sessions.get(id)?.client ?? client)
+        .end()
+        .then(async (failed) => {
+          if (failed) await readiness.retry();
+          win.destroy();
+        })
+        .catch(() => {
+          closing = false;
+          console.warn(
+            "[moxi] Failed client could not be recorded. Close the window to try again.",
+          );
+        });
+    });
+    win.webContents.on("render-process-gone", () => {
+      if (closing) return;
+      closing = true;
+      void (sessions.get(id)?.client ?? client)
+        .end(true)
+        .then(async (failed) => {
+          if (failed) await readiness.retry();
+          if (!win.isDestroyed()) win.destroy();
+        })
+        .catch(() => {
+          closing = false;
+          console.warn("[moxi] Failed client could not be recorded.");
+        });
+    });
+  }
   win.on("closed", () => {
     network.closeWindow(id);
     sessions.delete(id);
@@ -342,11 +376,21 @@ else {
       handle("game.dns", (name) => network.resolve(name), windowKind);
       handle(
         "game.net.healthy",
-        async (token, owner) => {
+        async ({ token, frame }, owner) => {
           const session = sessions.get(owner);
           if (!session || session.token !== token)
             throw new Error("Game session is not connected.");
-          await session.client.confirmHealthy(token, network.hasConnected(owner));
+          return session.client.confirmHealthy(token, network.hasConnected(owner), frame);
+        },
+        windowKind,
+      );
+      handle(
+        "game.client.failed",
+        (token, owner) => {
+          const session = sessions.get(owner);
+          if (!session || session.token !== token)
+            throw new Error("Stale client generation token.");
+          session.client.reportFailure();
           return undefined;
         },
         windowKind,
