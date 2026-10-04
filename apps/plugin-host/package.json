@@ -6,6 +6,7 @@
     "@moxi/contracts": "workspace:*",
     "@moxi/sdk": "workspace:*",
     "@moxi/ui": "workspace:*",
+    "arktype": "2.2.7",
     "vue": "3.5.43"
   }
 }

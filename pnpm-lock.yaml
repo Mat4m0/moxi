@@ -112,6 +112,9 @@ importers:
       '@moxi/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      arktype:
+        specifier: 2.2.7
+        version: 2.2.7
       vue:
         specifier: 3.5.43
         version: 3.5.43(typescript@5.9.3)

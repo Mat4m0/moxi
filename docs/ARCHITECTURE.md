@@ -72,7 +72,7 @@ Import rules (enforced by lint, not by tests):
 | `packages/ui` | `vue`, `packages/sdk` types |
 | `plugins/*` | `@moxi/sdk` only |
 | `apps/desktop` | `packages/contracts`, `packages/gwkit`; `electron` only in `src/shell/**` |
-| `apps/*` renderers | `packages/contracts`, `packages/ui`, `packages/gwkit` (game only), `packages/sdk` (plugin-host and game), `lucide-vue-next` (launcher, as v1) |
+| `apps/*` renderers | `packages/contracts`, `packages/ui`, `packages/gwkit` (game only), `packages/sdk` (plugin-host and game), `lucide-vue-next` (launcher, as v1), `arktype` (plugin-host, to validate worker messages) |
 
 `apps/desktop/src/shell/**` is the only code that touches Electron APIs. All
 other Main code is plain Node, so Vitest runs it without Electron.
