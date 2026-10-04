@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, expect, test, vi } from "vite-plus/test";
 import { MessageChannel, Worker } from "node:worker_threads";
 import { DatabaseSync } from "node:sqlite";
-import type { HostToHub, HubToHost, ToHost } from "@moxi/sdk/host";
+import type { HostToHub, HubToHost } from "@moxi/sdk/host";
 import { createPluginDocuments } from "@moxi/desktop/plugin-documents";
 import { migrations } from "@moxi/desktop/storage";
 import { PluginHost } from "./plugin-host.ts";
@@ -15,6 +15,7 @@ beforeEach(() =>
 );
 afterEach(() => {
   for (const dispose of cleanup.splice(0)) dispose();
+  vi.restoreAllMocks();
   vi.useRealTimers();
 });
 
@@ -47,7 +48,7 @@ function harness(
       return {
         postMessage: (message) => worker.postMessage(message),
         listen: (handler, onError) => {
-          worker.on("message", (message: ToHost) => handler(message));
+          worker.on("message", (message: unknown) => handler(message));
           worker.on("error", (error) => onError(error.message));
         },
         terminate: () => {
@@ -95,9 +96,9 @@ function harness(
       signal();
     });
   let requestId = 0;
-  async function command(commandId: string) {
+  async function command(commandId: string, pluginId = "test.protocol") {
     const id = ++requestId;
-    send({ t: "command", requestId: id, pluginId: "test.protocol", commandId });
+    send({ t: "command", requestId: id, pluginId, commandId });
     await until(() => messages.some((m) => m.t === "commandResult" && m.requestId === id));
   }
   send({ t: "openHub" });
@@ -221,6 +222,7 @@ test("a delayed command cannot restore a view from a closed Hub session", async 
     viewId: null,
   });
   expect(h.host.state.views).toEqual({});
+  expect(h.host.state.plugins["test.protocol"]!.status).toBe("running");
 });
 
 test("Results from a new query never mix with another plugin's previous query and closing clears them", async () => {
@@ -356,3 +358,297 @@ test("plugin documents round-trip through the document port and receive changes 
     text: '{"text":"saved"}',
   });
 });
+
+test("items:null stops only the sender, counts as a crash and leaves another worker usable", async () => {
+  const h = harness();
+  h.host.register(
+    {
+      id: "test.second",
+      name: "Second",
+      version: "1.0.0",
+      api: 1,
+      description: "Healthy worker",
+      permissions: [],
+      activation: ["hub"],
+      commands: [],
+    },
+    "fixture",
+    0,
+  );
+  await h.command("clear", "test.second");
+  for (let i = 0; i < 3; i++) {
+    await h.command('send:{"t":"items","items":null}');
+    const broken = h.host.state.plugins["test.protocol"]!;
+    expect({ status: broken.status, reason: broken.crashReason, items: broken.items }).toEqual({
+      status: "crashed",
+      reason: "Sent an invalid or oversized message",
+      items: [],
+    });
+  }
+  expect(h.host.state.plugins["test.protocol"]!.enabled).toBe(false);
+  expect(h.host.state.log[0]?.text).toBe("Protocol fixture: Sent an invalid or oversized message");
+  await h.command("clear", "test.second");
+  expect(h.host.state.plugins["test.second"]!.status).toBe("running");
+  expect(h.host.state.plugins["test.second"]!.items).toEqual([
+    { id: "Ready", title: "Ready", actions: [] },
+  ]);
+});
+
+test("a worker cannot take over another worker's host-issued view id", async () => {
+  const h = harness();
+  h.host.register(
+    {
+      id: "test.second",
+      name: "Second",
+      version: "1.0.0",
+      api: 1,
+      description: "Other worker",
+      permissions: [],
+      activation: ["hub"],
+      commands: [],
+    },
+    "fixture",
+    0,
+  );
+  await h.command("view");
+  const viewId = Object.keys(h.host.state.views)[0]!;
+  await h.command(
+    "send:" +
+      JSON.stringify({
+        t: "view",
+        viewId,
+        view: { type: "list", title: "Stolen", items: [], filter: "host" },
+      }),
+    "test.second",
+  );
+  expect(h.host.state.plugins["test.second"]!.crashReason).toBe(
+    "Tried to change a view it does not own",
+  );
+  expect(h.host.state.views[viewId]).toEqual({
+    pluginId: "test.protocol",
+    view: { type: "list", title: "Owned view", items: [], filter: "host" },
+  });
+  await h.command("clear");
+  expect(h.host.state.plugins["test.protocol"]!.status).toBe("running");
+});
+
+test.each([
+  { kind: "items", size: 500, crashed: false },
+  { kind: "items", size: 501, crashed: true },
+  { kind: "nodes", size: 2000, crashed: false },
+  { kind: "nodes", size: 2001, crashed: true },
+  { kind: "text", size: 4000, crashed: false },
+  { kind: "text", size: 4001, crashed: true },
+])("oversized $kind cannot enter Hub state (size $size)", async ({ kind, size, crashed }) => {
+  const h = harness();
+  const payload =
+    kind === "items"
+      ? {
+          t: "items",
+          items: Array.from({ length: size }, (_, i) => ({
+            id: String(i),
+            title: "Item",
+            actions: [],
+          })),
+        }
+      : kind === "nodes"
+        ? {
+            t: "hud",
+            id: "tree",
+            node: {
+              type: "row",
+              children: Array.from({ length: size - 1 }, () => ({ type: "text", text: "Leaf" })),
+            },
+          }
+        : { t: "items", items: [{ id: "text", title: "x".repeat(size), actions: [] }] };
+  await h.command("send:" + JSON.stringify(payload));
+  const plugin = h.host.state.plugins["test.protocol"]!;
+  expect(plugin.status).toBe(crashed ? "crashed" : "running");
+  if (crashed) expect({ items: plugin.items, hud: plugin.hud }).toEqual({ items: [], hud: {} });
+  else if (kind === "items") expect(plugin.items).toHaveLength(500);
+  else if (kind === "text") expect(plugin.items[0]!.title).toHaveLength(4000);
+  else {
+    const tree = plugin.hud.tree;
+    if (tree?.type !== "row") throw new Error("Missing HUD tree");
+    expect(tree.children).toHaveLength(1999);
+  }
+});
+
+test.each([
+  { count: 500, crashed: false },
+  { count: 501, crashed: true },
+])(
+  "a message flood stops at the rolling one-second limit (count $count)",
+  async ({ count, crashed }) => {
+    const h = harness();
+    await h.command("capture");
+    vi.spyOn(performance, "now").mockReturnValue(1000);
+    await h.command(`rate:${count - 1}`);
+    expect(h.host.state.plugins["test.protocol"]!.status).toBe(crashed ? "crashed" : "running");
+    if (crashed)
+      expect(h.host.state.plugins["test.protocol"]!.crashReason).toBe(
+        "Sent too many messages in one second",
+      );
+    else {
+      vi.spyOn(performance, "now").mockReturnValue(2000);
+      await h.command("clear");
+      expect(h.host.state.plugins["test.protocol"]!.items).toEqual([
+        { id: "Ready", title: "Ready", actions: [] },
+      ]);
+    }
+  },
+);
+
+test.each(["close", "stop"])(
+  "ten superseded unanswered queries settle without replies and %s settles the last one",
+  async (end) => {
+    const h = harness();
+    await h.command("capture");
+    const pending: Promise<void>[] = [];
+    for (let i = 0; i <= 10; i++) {
+      const text = `hold:${i}`;
+      pending.push(h.host.query(text, null));
+      await h.until(() => h.host.state.plugins["test.protocol"]!.items[0]?.title === text);
+    }
+    await Promise.all(pending.slice(0, 10));
+    if (end === "close") h.send({ t: "closeHub" });
+    else h.host.stopPlugin("test.protocol");
+    await pending[10];
+    expect(h.host.state.queryResults).toEqual({});
+    expect(h.host.state.queryFor).toBe(null);
+  },
+);
+
+test.each([
+  { t: "unknown" },
+  { t: "subscribe", slice: "credentials" },
+  { t: "hud", id: "broken", node: { type: "row", children: null } },
+  { t: "view", viewId: "anything", view: null },
+  { t: "request", reqId: 1, op: "doc.read", args: null, activation: null },
+  { t: "request", reqId: 1, op: "toast", args: { title: null }, activation: null },
+])("malformed worker payloads fail closed: %j", async (payload) => {
+  const h = harness();
+  await h.command("send:" + JSON.stringify(payload));
+  expect(h.host.state.plugins["test.protocol"]!.crashReason).toBe(
+    "Sent an invalid or oversized message",
+  );
+});
+
+test.each([
+  { surface: "view", size: 500, crashed: false },
+  { surface: "view", size: 501, crashed: true },
+  { surface: "query", size: 500, crashed: false },
+  { surface: "query", size: 501, crashed: true },
+  { surface: "detail", size: 2000, crashed: false },
+  { surface: "detail", size: 2001, crashed: true },
+])(
+  "$surface results cannot bypass the item or tree bounds (size $size)",
+  async ({ surface, size, crashed }) => {
+    const h = harness();
+    await h.command('send:{"t":"items","items":[]}');
+    if (surface === "query") await h.host.query(`items:${size}`, null);
+    else await h.command(`${surface === "view" ? "view-items" : "view-nodes"}:${size}`);
+    expect(h.host.state.plugins["test.protocol"]!.status).toBe(crashed ? "crashed" : "running");
+    if (crashed) expect(h.host.state.views).toEqual({});
+    else if (surface === "query")
+      expect(h.host.state.queryResults["test.protocol"]).toHaveLength(500);
+    else {
+      const view = Object.values(h.host.state.views)[0]!.view;
+      if (view.type === "list") expect(view.items).toHaveLength(500);
+      else if (view.type === "detail") expect(view.blocks).toHaveLength(1999);
+      else throw new Error("Unexpected view");
+    }
+  },
+);
+
+test.each([
+  { size: 499, crashed: false },
+  { size: 500, crashed: true },
+])(
+  "the item budget includes catalogs and query results together (query size $size)",
+  async ({ size, crashed }) => {
+    const h = harness();
+    await h.command("clear");
+    await h.host.query(`items:${size}`, null);
+    expect(h.host.state.plugins["test.protocol"]!.status).toBe(crashed ? "crashed" : "running");
+    if (crashed)
+      expect(h.host.state.plugins["test.protocol"]!.crashReason).toBe("Published too many items");
+    else expect(h.host.state.queryResults["test.protocol"]).toHaveLength(499);
+  },
+);
+
+test.each([
+  { surface: "views", size: 32, crashed: false },
+  { surface: "views", size: 33, crashed: true },
+  { surface: "hud", size: 32, crashed: false },
+  { surface: "hud", size: 33, crashed: true },
+])(
+  "repeated $surface cannot grow without limit (size $size)",
+  async ({ surface, size, crashed }) => {
+    const h = harness();
+    await h.command('send:{"t":"hud","id":"player","node":null}');
+    await h.command('send:{"t":"hud","id":"target","node":null}');
+    for (let i = 0; i < size; i++) {
+      if (surface === "views") await h.command("view");
+      else
+        await h.command(
+          "send:" +
+            JSON.stringify({ t: "hud", id: `widget:${i}`, node: { type: "text", text: "Widget" } }),
+        );
+    }
+    expect(h.host.state.plugins["test.protocol"]!.status).toBe(crashed ? "crashed" : "running");
+    if (crashed)
+      expect({
+        views: h.host.state.views,
+        hud: h.host.state.plugins["test.protocol"]!.hud,
+      }).toEqual({ views: {}, hud: {} });
+    else if (surface === "views") expect(Object.keys(h.host.state.views)).toHaveLength(32);
+    else {
+      expect(Object.keys(h.host.state.plugins["test.protocol"]!.hud)).toHaveLength(32);
+      await h.command('send:{"t":"hud","id":"absent","node":null}');
+      expect(h.host.state.plugins["test.protocol"]!.status).toBe("running");
+    }
+  },
+);
+
+test("a late render of a closed view is ignored without falsely crashing its worker", async () => {
+  const h = harness();
+  await h.command("view");
+  const viewId = Object.keys(h.host.state.views)[0]!;
+  h.send({ t: "closeView", viewId });
+  await h.command(
+    "send:" +
+      JSON.stringify({
+        t: "view",
+        viewId,
+        view: { type: "list", title: "Restored", items: [], filter: "host" },
+      }),
+  );
+  expect(h.host.state.plugins["test.protocol"]!.status).toBe("running");
+  expect(h.host.state.views).toEqual({});
+});
+
+test.each([
+  { bound: "depth", size: 64, crashed: false },
+  { bound: "depth", size: 65, crashed: true },
+  { bound: "values", size: 16000, crashed: false },
+  { bound: "values", size: 16001, crashed: true },
+])(
+  "worker payload traversal is bounded before schema recursion ($bound $size)",
+  async ({ bound, size, crashed }) => {
+    const h = harness();
+    let extra: unknown = {};
+    if (bound === "depth") {
+      for (let i = 1; i < size; i++) extra = { nested: extra };
+    } else {
+      extra = Object.fromEntries(
+        Array.from({ length: 8 }, (_, i) => [
+          String(i),
+          Array.from({ length: i < 7 ? 2000 : size - 14011 }, () => "x"),
+        ]),
+      );
+    }
+    await h.command("send:" + JSON.stringify({ t: "ready", extra }));
+    expect(h.host.state.plugins["test.protocol"]!.status).toBe(crashed ? "crashed" : "running");
+  },
+);

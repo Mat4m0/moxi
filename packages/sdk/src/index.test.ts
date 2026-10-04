@@ -22,6 +22,22 @@ const manifest: Manifest = {
 };
 
 describe("SDK runtime", () => {
+  test("a late initial document read cannot overwrite an edit through another document handle", async () => {
+    const host = await settle(
+      createTestHost(
+        manifest,
+        definePlugin(({ storage, hud }) => {
+          const displayed = storage.doc("value", () => "Initial");
+          const edited = storage.doc("value", () => "Ignored");
+          hud.widget("value", () => Text(displayed.value()));
+          queueMicrotask(() => void edited.set("Edited"));
+        }),
+        { documents: { value: "Stored" }, documentReadDelay: 1000 },
+      ),
+    );
+    expect(host.state.hud.value).toEqual({ type: "text", text: "Edited", tone: undefined });
+  });
+
   test("game actions without a player choice are refused", async () => {
     const host = await settle(
       createTestHost(

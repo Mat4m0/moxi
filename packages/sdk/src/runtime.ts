@@ -13,7 +13,10 @@ export function startRuntime(port: Port, setup: Setup) {
   const effects: ReactiveEffectRunner[] = [];
   const slices = new Map<Slice, ReturnType<typeof shallowRef<Observed<unknown>>>>();
   const pending = new Map<number, (value: unknown) => void>();
-  const docs = new Map<string, ReturnType<typeof shallowRef<unknown>>>();
+  const docs = new Map<
+    string,
+    { ref: ReturnType<typeof shallowRef<unknown>>; generation: number }
+  >();
   const commandHandlers = new Map<
     string,
     { kind: "view"; render: () => View } | { kind: "action"; run: () => unknown }
@@ -101,17 +104,18 @@ export function startRuntime(port: Port, setup: Setup) {
       doc<T>(name: string, initial: () => T): Doc<T> {
         let ref = docs.get(name);
         if (!ref) {
-          ref = shallowRef<unknown>(initial());
+          ref = { ref: shallowRef<unknown>(initial()), generation: 0 };
           docs.set(name, ref);
           void request<unknown>("doc.read", { name }).then((stored) => {
-            if (stored !== null && stored !== undefined) r.value = stored;
+            if (r.generation === 0 && stored !== null && stored !== undefined) r.ref.value = stored;
           });
         }
         const r = ref;
         return {
-          value: () => r.value as T,
+          value: () => r.ref.value as T,
           async set(next) {
-            r.value = next;
+            r.generation++;
+            r.ref.value = next;
             await request("doc.write", { name, value: next });
           },
         };
@@ -188,7 +192,10 @@ export function startRuntime(port: Port, setup: Setup) {
         break;
       case "doc": {
         const ref = docs.get(msg.name);
-        if (ref) ref.value = msg.value;
+        if (ref) {
+          ref.generation++;
+          ref.ref.value = msg.value;
+        }
         break;
       }
       case "settings":

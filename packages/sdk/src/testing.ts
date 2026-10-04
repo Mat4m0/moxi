@@ -10,13 +10,18 @@ type GameScript = Partial<Record<Slice, Observed<unknown>>>;
 export async function createTestHost(
   value: unknown,
   setup: Setup,
-  opts: { game?: GameScript; actionResult?: ActionResult } = {},
+  opts: {
+    game?: GameScript;
+    actionResult?: ActionResult;
+    documents?: Record<string, unknown>;
+    documentReadDelay?: number;
+  } = {},
 ) {
   const manifest = parseManifest(value);
   let toPlugin!: (msg: ToPlugin) => void;
   const game: GameScript = { ...opts.game };
   const subscribed = new Set<Slice>();
-  const docs = new Map<string, unknown>();
+  const docs = new Map<string, unknown>(Object.entries(opts.documents ?? {}));
   const state: {
     items: WireItem[];
     hud: Record<string, HudNode | null>;
@@ -81,7 +86,10 @@ export async function createTestHost(
           if (msg.op === "doc.read") value = docs.get(args.name) ?? null;
           else if ("value" in args) docs.set(args.name, args.value);
         } else if (msg.op === "toast") state.toasts.push(msg.args);
-        queueMicrotask(() => toPlugin({ t: "result", reqId: msg.reqId, value }));
+        const reply = () => toPlugin({ t: "result", reqId: msg.reqId, value });
+        if (msg.op === "doc.read" && opts.documentReadDelay)
+          setTimeout(reply, opts.documentReadDelay);
+        else queueMicrotask(reply);
         break;
       }
     }

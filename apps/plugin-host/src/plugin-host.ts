@@ -1,12 +1,13 @@
-import { jsonValue, type DocumentChange, type DocumentRef, type Json } from "@moxi/contracts";
+import { type DocumentChange, type DocumentRef, type Json } from "@moxi/contracts";
 import type { DocumentPort } from "./documents.ts";
 import { emptyHubState, parseManifest } from "@moxi/sdk/host";
-import type { HostPort, HubState, HubToast, ToHost, ToPlugin, WireItem } from "@moxi/sdk/host";
+import { pluginLimits, readWorkerMessage, type WorkerMessage } from "./worker-messages.ts";
+import type { HostPort, HubState, HubToast, ToPlugin, WireItem } from "@moxi/sdk/host";
 import type { ActionResult, Observed, Slice } from "@moxi/sdk";
 
 export type PluginWorker = {
   postMessage(message: ToPlugin): void;
-  listen(handler: (message: ToHost) => void, onError: (message: string) => void): void;
+  listen(handler: (message: unknown) => void, onError: (message: string) => void): void;
   terminate(): void;
 };
 type Running = {
@@ -15,8 +16,10 @@ type Running = {
   ready: Promise<boolean>;
   settleReady: (ready: boolean) => void;
   tokens: Map<string, number>;
-  requests: Map<number, (items: WireItem[]) => void>;
-  commands: Map<number, () => void>;
+  query?: { reqId: number; resolve: (items: WireItem[]) => void };
+  views: Set<string>;
+  messages: number[];
+  commands: Map<number, { resolve: () => void; viewId: string }>;
   documents: Map<string, { value: Json; revision: number }>;
 };
 
@@ -61,6 +64,7 @@ export class PluginHost {
           this.hubOpen = true;
           this.hubSession++;
           this.queryGen++;
+          this.cancelQueries();
           this.state.queryResults = {};
           this.state.queryFor = null;
           for (const p of Object.values(this.state.plugins))
@@ -72,9 +76,11 @@ export class PluginHost {
           this.hubOpen = false;
           this.hubSession++;
           this.queryGen++;
+          this.cancelQueries();
           this.state.queryResults = {};
           this.state.queryFor = null;
           for (const viewId of Object.keys(this.state.views)) this.closeView(viewId);
+          for (const r of this.running.values()) r.views.clear();
           this.changed();
           break;
         case "query":
@@ -95,7 +101,22 @@ export class PluginHost {
           );
           break;
         case "pushView":
-          this.invoke(message.pluginId, message.surface, message.target, [message.viewId]);
+          {
+            const r = this.running.get(message.pluginId);
+            if (!r) break;
+            if (
+              !message.viewId.startsWith(`view:${message.pluginId}:`) ||
+              this.state.views[message.viewId] ||
+              r.views.has(message.viewId)
+            )
+              break;
+            if (r.views.size >= pluginLimits.views) {
+              this.crashPlugin(message.pluginId, "Opened too many views");
+              break;
+            }
+            r.views.add(message.viewId);
+            this.invoke(message.pluginId, message.surface, message.target, [message.viewId]);
+          }
           break;
         case "closeView":
           this.closeView(message.viewId);
@@ -212,22 +233,37 @@ export class PluginHost {
       ready,
       settleReady,
       tokens: new Map(),
-      requests: new Map(),
+      views: new Set(),
+      messages: [],
       commands: new Map(),
       documents: new Map(),
     };
     this.running.set(id, entry);
     worker.listen(
-      (message) => {
+      (value) => {
         // An old worker cannot restore UI or resolve a replacement worker's requests.
         if (this.running.get(id) !== entry) return;
-        entry.lastPong = performance.now();
+        const now = performance.now();
+        while (entry.messages.length && now - entry.messages[0]! >= 1000) entry.messages.shift();
+        if (entry.messages.length >= pluginLimits.messagesPerSecond) {
+          this.crashPlugin(id, "Sent too many messages in one second");
+          return;
+        }
+        entry.messages.push(now);
+        const message = readWorkerMessage(value);
+        if (!message) {
+          this.crashPlugin(id, "Sent an invalid or oversized message");
+          return;
+        }
+        entry.lastPong = now;
         if (message.t === "ready") {
           p.status = "running";
           p.startMs = Math.round(performance.now() - t0);
           settleReady(true);
         }
-        void this.onMessage(id, entry, message);
+        void this.onMessage(id, entry, message).catch(() => {
+          if (this.running.get(id) === entry) this.crashPlugin(id, "Could not handle its message");
+        });
       },
       (message) => {
         if (this.running.get(id) === entry) this.log(`${p.manifest.name}: ${message}`, "error");
@@ -245,8 +281,8 @@ export class PluginHost {
     this.running.delete(id);
     r?.worker.terminate();
     r?.settleReady(false);
-    for (const resolve of r?.requests.values() ?? []) resolve([]);
-    for (const resolve of r?.commands.values() ?? []) resolve();
+    if (r) this.settleQuery(r);
+    for (const command of r?.commands.values() ?? []) command.resolve();
     for (const action of this.actions.values())
       if (action.pluginId === id)
         action.resolve({ status: "failed", message: "The plugin stopped." });
@@ -265,6 +301,19 @@ export class PluginHost {
       if (recent.length >= 3) p.enabled = false;
     }
     this.changed();
+  }
+
+  private crashPlugin(id: string, reason: string) {
+    this.log(`${this.state.plugins[id]!.manifest.name}: ${reason}`, "error");
+    this.stopPlugin(id, reason);
+  }
+  private settleQuery(r: Running) {
+    const query = r.query;
+    delete r.query;
+    query?.resolve([]);
+  }
+  private cancelQueries() {
+    for (const r of this.running.values()) this.settleQuery(r);
   }
 
   private setEnabled(id: string, enabled: boolean) {
@@ -345,7 +394,7 @@ export class PluginHost {
     }
   }
 
-  private async onMessage(id: string, r: Running, message: ToHost) {
+  private async onMessage(id: string, r: Running, message: WorkerMessage) {
     const p = this.state.plugins[id]!;
     switch (message.t) {
       case "subscribe":
@@ -353,21 +402,54 @@ export class PluginHost {
         this.publish(id, message.slice);
         break;
       case "items":
+        if (!this.acceptItems(id, message.items.length, "items")) return;
         p.items = message.items;
         break;
       case "hud":
-        p.hud[message.id] = message.node;
+        if (
+          message.node !== null &&
+          !Object.hasOwn(p.hud, message.id) &&
+          Object.keys(p.hud).length >= pluginLimits.hudWidgets
+        ) {
+          this.crashPlugin(id, "Created too many HUD widgets");
+          return;
+        }
+        if (message.node === null) delete p.hud[message.id];
+        else p.hud = { ...p.hud, [message.id]: message.node };
         break;
       case "view":
+        if (!message.viewId.startsWith(`view:${id}:`)) {
+          this.crashPlugin(id, "Tried to change a view it does not own");
+          return;
+        }
+        // A render in flight when its view closes must not revive it or crash the worker.
+        if (!r.views.has(message.viewId)) return;
+        if (
+          !this.acceptItems(
+            id,
+            message.view.type === "list" ? message.view.items.length : 0,
+            message.viewId,
+          )
+        )
+          return;
         this.state.views[message.viewId] = { pluginId: id, view: message.view };
         break;
-      case "commandDone":
-        r.commands.get(message.opId)?.();
-        r.commands.delete(message.opId);
+      case "commandDone": {
+        const command = r.commands.get(message.opId);
+        if (command) {
+          if (!this.state.views[command.viewId]) r.views.delete(command.viewId);
+          r.commands.delete(message.opId);
+          command.resolve();
+        }
         break;
+      }
       case "queryResult":
-        r.requests.get(message.reqId)?.(message.items);
-        r.requests.delete(message.reqId);
+        if (r.query?.reqId === message.reqId) {
+          if (!this.acceptItems(id, message.items.length, "query")) return;
+          const query = r.query;
+          delete r.query;
+          query.resolve(message.items);
+        }
         break;
       case "error":
         this.log(`${p.manifest.name}: ${message.message}`, "error");
@@ -377,28 +459,26 @@ export class PluginHost {
         if (message.op === "game.loadBuild" || message.op === "game.travel")
           value = await this.gameAction(id, r, message.op, message.args, message.activation);
         else if (message.op === "doc.read" || message.op === "doc.write") {
-          const args = message.args;
-          if (
-            !args ||
-            typeof args !== "object" ||
-            !("name" in args) ||
-            typeof args.name !== "string"
-          )
-            throw new Error("Invalid document request");
-          const ref: DocumentRef = { plugin: id, scope: "global", account: null, name: args.name };
+          const ref: DocumentRef = {
+            plugin: id,
+            scope: "global",
+            account: null,
+            name: message.args.name,
+          };
           try {
             if (message.op === "doc.read") {
               const stored = await this.documents.read(ref);
-              if (stored) this.documentChanged({ ref, ...stored });
+              // Hydrate through the reply; only document changes are pushed.
+              if (stored) this.cacheDocument(r, ref.name, stored);
               value = r.documents.get(ref.name)?.value ?? null;
-            } else if ("value" in args) {
+            } else {
               if (!r.documents.has(ref.name)) {
                 const stored = await this.documents.read(ref);
-                if (stored) this.documentChanged({ ref, ...stored });
+                if (stored) this.cacheDocument(r, ref.name, stored);
               }
               const result = await this.documents.write({
                 ref,
-                value: jsonValue.assert(args.value),
+                value: message.args.value,
                 expectedRevision: r.documents.get(ref.name)?.revision ?? 0,
               });
               if (!result.ok) {
@@ -411,24 +491,7 @@ export class PluginHost {
             this.log(`${p.manifest.name}: the document could not be saved or read`, "error");
             value = null;
           }
-        } else if (message.op === "toast") {
-          const args = message.args;
-          if (
-            args &&
-            typeof args === "object" &&
-            "title" in args &&
-            typeof args.title === "string"
-          ) {
-            const toast: HubToast = { title: args.title };
-            if ("message" in args && typeof args.message === "string") toast.message = args.message;
-            if (
-              "tone" in args &&
-              (args.tone === "positive" || args.tone === "danger" || args.tone === "default")
-            )
-              toast.tone = args.tone;
-            this.toast(p.manifest.name, toast);
-          }
-        }
+        } else if (message.op === "toast") this.toast(p.manifest.name, message.args);
         if (this.running.get(id) === r) this.send(id, { t: "result", reqId: message.reqId, value });
         break;
       }
@@ -436,11 +499,34 @@ export class PluginHost {
     if (message.t !== "pong") this.changed();
   }
 
+  private acceptItems(id: string, incoming: number, surface: string) {
+    const p = this.state.plugins[id]!;
+    let total = incoming;
+    if (surface !== "items") total += p.items.length;
+    if (surface !== "query") total += this.state.queryResults[id]?.length ?? 0;
+    for (const [viewId, entry] of Object.entries(this.state.views)) {
+      if (entry.pluginId === id && viewId !== surface && entry.view.type === "list")
+        total += entry.view.items.length;
+    }
+    if (total <= pluginLimits.items) return true;
+    this.crashPlugin(id, "Published too many items");
+    return false;
+  }
+
+  private cacheDocument(r: Running, name: string, stored: { value: Json; revision: number }) {
+    if (stored.revision < (r.documents.get(name)?.revision ?? 0)) return false;
+    r.documents.set(name, stored);
+    return true;
+  }
+
   private documentChanged(change: DocumentChange) {
     if (this.disposed || change.ref.scope !== "global") return;
-    const documents = this.running.get(change.ref.plugin)?.documents;
-    if (!documents || change.revision < (documents.get(change.ref.name)?.revision ?? 0)) return;
-    documents.set(change.ref.name, { value: change.value, revision: change.revision });
+    const r = this.running.get(change.ref.plugin);
+    if (
+      !r ||
+      !this.cacheDocument(r, change.ref.name, { value: change.value, revision: change.revision })
+    )
+      return;
     this.send(change.ref.plugin, { t: "doc", name: change.ref.name, value: change.value });
   }
 
@@ -451,8 +537,9 @@ export class PluginHost {
     const r = this.running.get(id);
     if (!r) return null;
     const opId = ++this.seq;
-    const viewId = `view:${id}:${opId}`;
-    const done = new Promise<void>((resolve) => r.commands.set(opId, resolve));
+    const viewId = this.issueView(id, r);
+    if (!viewId) return null;
+    const done = new Promise<void>((resolve) => r.commands.set(opId, { resolve, viewId }));
     this.send(id, {
       t: "command",
       opId,
@@ -467,6 +554,15 @@ export class PluginHost {
     }
     return this.state.views[viewId] ? viewId : null;
   }
+  private issueView(id: string, r: Running) {
+    if (r.views.size >= pluginLimits.views) {
+      this.crashPlugin(id, "Opened too many views");
+      return null;
+    }
+    const viewId = `view:${id}:${++this.seq}`;
+    r.views.add(viewId);
+    return viewId;
+  }
   private invoke(id: string, surface: string, target: string, args?: unknown[], grant = true) {
     this.send(id, {
       t: "invoke",
@@ -477,14 +573,20 @@ export class PluginHost {
     });
   }
   private closeView(viewId: string) {
+    for (const [id, r] of this.running) {
+      if (r.views.delete(viewId)) this.send(id, { t: "closeView", viewId });
+    }
     const view = this.state.views[viewId];
     if (!view) return;
-    this.send(view.pluginId, { t: "closeView", viewId });
     delete this.state.views[viewId];
     this.changed();
   }
-  private async query(text: string, scope: string | null) {
+  async query(text: string, scope: string | null) {
     const gen = ++this.queryGen;
+    this.cancelQueries();
+    this.state.queryResults = {};
+    this.state.queryFor = null;
+    this.changed();
     const ids = Object.values(this.state.plugins)
       .filter((p) => p.enabled && p.manifest.activation.includes("hub"))
       .map((p) => p.manifest.id);
@@ -495,7 +597,7 @@ export class PluginHost {
         if (!r) return;
         const reqId = ++this.seq;
         const items = await new Promise<WireItem[]>((resolve) => {
-          r.requests.set(reqId, resolve);
+          r.query = { reqId, resolve };
           this.send(id, { t: "query", reqId, text, scope });
         });
         if (gen === this.queryGen && this.hubOpen && this.running.get(id) === r) {

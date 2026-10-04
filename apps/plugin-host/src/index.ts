@@ -1,5 +1,5 @@
 import { hubPortMessage, type Bridge } from "@moxi/contracts";
-import type { HubToHost, ToHost } from "@moxi/sdk/host";
+import type { HubToHost } from "@moxi/sdk/host";
 import { PluginHost } from "./plugin-host.ts";
 
 const sessions = new Map<number, { host: PluginHost; port: MessagePort }>();
@@ -47,7 +47,7 @@ window.addEventListener("message", (event: MessageEvent) => {
       return {
         postMessage: (message) => worker.postMessage(message),
         listen: (handler, onError) => {
-          worker.onmessage = (message: MessageEvent<ToHost>) => handler(message.data);
+          worker.onmessage = (message: MessageEvent<unknown>) => handler(message.data);
           worker.onerror = (error) => onError(error.message);
         },
         terminate: () => worker.terminate(),

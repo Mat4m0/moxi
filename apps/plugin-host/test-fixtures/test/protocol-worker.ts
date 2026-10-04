@@ -30,6 +30,45 @@ port.on("message", (message: ToPlugin) => {
       post({ t: "pong", seq: message.seq });
       break;
     case "command":
+      if (message.id.startsWith("send:")) port.postMessage(JSON.parse(message.id.slice(5)));
+      if (message.id.startsWith("rate:")) {
+        for (let i = 0; i < Number(message.id.slice(5)); i++) post({ t: "pong", seq: i });
+      }
+      if (message.id === "view")
+        post({
+          t: "view",
+          viewId: message.viewId,
+          view: { type: "list", title: "Owned view", items: [], filter: "host" },
+        });
+      if (message.id.startsWith("view-items:"))
+        post({
+          t: "view",
+          viewId: message.viewId,
+          view: {
+            type: "list",
+            title: "Bounded",
+            items: Array.from({ length: Number(message.id.slice(11)) }, (_, i) => ({
+              id: String(i),
+              title: "Item",
+              actions: [],
+            })),
+            filter: "host",
+          },
+        });
+      if (message.id.startsWith("view-nodes:"))
+        post({
+          t: "view",
+          viewId: message.viewId,
+          view: {
+            type: "detail",
+            title: "Bounded",
+            blocks: Array.from({ length: Number(message.id.slice(11)) - 1 }, () => ({
+              type: "text",
+              text: "Block",
+            })),
+            actions: [],
+          },
+        });
       if (message.id === "freeze") {
         post({ t: "items", items: items("Hanging") });
         for (;;) {
@@ -71,7 +110,7 @@ port.on("message", (message: ToPlugin) => {
       post({ t: "commandDone", opId: message.opId });
       break;
     case "result":
-      post({ t: "items", items: items(JSON.stringify(message.value)) });
+      post({ t: "items", items: items(JSON.stringify(message.value ?? null)) });
       break;
     case "doc":
       post({
@@ -81,7 +120,19 @@ port.on("message", (message: ToPlugin) => {
       });
       break;
     case "query":
-      if (message.text === "old") {
+      if (message.text.startsWith("items:")) {
+        post({
+          t: "queryResult",
+          reqId: message.reqId,
+          items: Array.from({ length: Number(message.text.slice(6)) }, (_, i) => ({
+            id: String(i),
+            title: "Item",
+            actions: [],
+          })),
+        });
+      } else if (message.text.startsWith("hold:")) {
+        post({ t: "items", items: items(message.text) });
+      } else if (message.text === "old") {
         oldQuery = message.reqId;
         post({ t: "items", items: items("Old query received") });
       } else {
