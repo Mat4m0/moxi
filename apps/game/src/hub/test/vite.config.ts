@@ -8,7 +8,6 @@ export default defineConfig({
   plugins: [vue()],
   test: {
     watch: false,
-    api: { host: "127.0.0.1", port: 4618, strictPort: true },
     include: ["apps/game/src/hub/hub.contract.test.ts"],
     browser: {
       enabled: true,
