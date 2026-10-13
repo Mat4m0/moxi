@@ -1,6 +1,7 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test, step, stageBudget } from "./runtime.ts";
 import { seedFixtureClient } from "@moxi/fixture-client";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
@@ -13,8 +14,10 @@ if (typeof executable !== "string") throw new Error("Electron executable is unav
 
 test("opaque plugin workers cannot access storage, game files or network and leave game IndexedDB untouched", async ({
   playwright,
-}) => {
+  cleanup,
+}, testInfo) => {
   const data = await mkdtemp(join(tmpdir(), "moxi-isolation-"));
+  cleanup.data.push(data);
   const patch = createServer((_request, response) => {
     response.writeHead(503);
     response.end();
@@ -33,78 +36,81 @@ test("opaque plugin workers cannot access storage, game files or network and lea
   delete env.MOXI_GAME_URL;
   delete env.MOXI_PLUGINHOST_URL;
   delete env.MOXI_CDP_PORT;
-  let application: Awaited<ReturnType<typeof playwright._electron.launch>> | undefined;
   try {
     await seedFixtureClient(join(data, "game"));
-    application = await playwright._electron.launch({
-      executablePath: executable,
-      args: [appPath],
-      env,
-    });
-    const started = application;
-    await expect
-      .poll(() => started.windows().some((page) => page.url() === "moxi://app/launcher/"))
-      .toBe(true);
-    const launcher = started.windows().find((page) => page.url() === "moxi://app/launcher/");
-    if (!launcher) throw new Error("Launcher did not open");
-    await expect(launcher.getByRole("button", { name: "Play", exact: true })).toBeEnabled();
-    const running = application;
-    await launcher.getByRole("button", { name: "Play", exact: true }).click();
-    await expect
-      .poll(() => running.windows().some((page) => page.url() === "moxi://app/game/"))
-      .toBe(true);
-    const game = running.windows().find((page) => page.url() === "moxi://app/game/");
-    if (!game) throw new Error("Game did not open");
-    await expect(game.getByRole("status")).toBeHidden();
-    await game.keyboard.press(process.platform === "darwin" ? "Meta+r" : "Control+r");
-    await expect(game.getByText("Isolation probe complete", { exact: true })).toBeVisible();
-    await expect(
-      game.getByText(
-        '{"opaqueOrigin":true,"indexedDB":true,"cacheStorage":true,"client":true,"game":true,"https":true,"remoteImport":true,"webSocket":true,"importScripts":true}',
-        { exact: true },
-      ),
-    ).toBeVisible();
-    expect(await game.evaluate(() => indexedDB.databases())).toEqual([]);
-    await game.getByRole("textbox").fill("10 ecto in p");
-    await expect(
-      game.getByText("10 Globs of Ectoplasm = 82 platinum", { exact: true }),
-    ).toBeVisible();
-    await game.screenshot({
-      path: resolve(import.meta.dirname, "../.evidence/s1/isolated-plugin-calculator.png"),
-    });
-    const isolation = await application.evaluate(({ BrowserWindow, session }) => {
-      const host = BrowserWindow.getAllWindows().find(
-        (window) => window.webContents.getURL() === "moxi://app/plugin-host/",
-      );
-      return {
-        partitioned: host?.webContents.session === session.fromPartition("persist:plugins"),
-        sharedWithGame: host?.webContents.session === session.defaultSession,
-      };
-    });
-    expect(isolation).toEqual({ partitioned: true, sharedWithGame: false });
-    expect(
-      await application.evaluate(async ({ session }) => {
-        const pluginSession = session.fromPartition("persist:plugins");
-        const results = [];
-        for (const path of ["client/Gw.snapshot", "game/", "launcher/"])
-          results.push((await pluginSession.fetch(`moxi://app/${path}`)).status);
-        const page = await pluginSession.fetch("moxi://app/plugin-host/");
-        return {
-          denied: results,
-          host: page.status,
-          csp: page.headers.get("Content-Security-Policy"),
-        };
+    const application = await step("start isolation Electron", () =>
+      playwright._electron.launch({
+        executablePath: executable,
+        args: [appPath],
+        env,
+        timeout: stageBudget,
       }),
-    ).toEqual({
-      denied: [404, 404, 404],
-      host: 200,
-      csp: "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; worker-src data:; connect-src 'none'",
+    );
+    cleanup.apps.push({ application, child: application.process() });
+    const started = application;
+    await step("verify plugin isolation and game storage", async () => {
+      await expect
+        .poll(() => started.windows().some((page) => page.url() === "moxi://app/launcher/"))
+        .toBe(true);
+      const launcher = started.windows().find((page) => page.url() === "moxi://app/launcher/");
+      if (!launcher) throw new Error("Launcher did not open");
+      await expect(launcher.getByRole("button", { name: "Play", exact: true })).toBeEnabled();
+      const running = started;
+      await launcher.getByRole("button", { name: "Play", exact: true }).click();
+      await expect
+        .poll(() => running.windows().some((page) => page.url() === "moxi://app/game/"))
+        .toBe(true);
+      const game = running.windows().find((page) => page.url() === "moxi://app/game/");
+      if (!game) throw new Error("Game did not open");
+      await expect(game.getByRole("status")).toBeHidden();
+      await game.keyboard.press(process.platform === "darwin" ? "Meta+r" : "Control+r");
+      await expect(game.getByText("Isolation probe complete", { exact: true })).toBeVisible();
+      await expect(
+        game.getByText(
+          '{"opaqueOrigin":true,"indexedDB":true,"cacheStorage":true,"client":true,"game":true,"https":true,"remoteImport":true,"webSocket":true,"importScripts":true}',
+          { exact: true },
+        ),
+      ).toBeVisible();
+      expect(await game.evaluate(() => indexedDB.databases())).toEqual([]);
+      await game.getByRole("textbox").fill("10 ecto in p");
+      await expect(
+        game.getByText("10 Globs of Ectoplasm = 82 platinum", { exact: true }),
+      ).toBeVisible();
+      await game.screenshot({
+        path: testInfo.outputPath("isolated-plugin-calculator.png"),
+      });
+      const isolation = await started.evaluate(({ BrowserWindow, session }) => {
+        const host = BrowserWindow.getAllWindows().find(
+          (window) => window.webContents.getURL() === "moxi://app/plugin-host/",
+        );
+        return {
+          partitioned: host?.webContents.session === session.fromPartition("persist:plugins"),
+          sharedWithGame: host?.webContents.session === session.defaultSession,
+        };
+      });
+      expect(isolation).toEqual({ partitioned: true, sharedWithGame: false });
+      expect(
+        await started.evaluate(async ({ session }) => {
+          const pluginSession = session.fromPartition("persist:plugins");
+          const results = [];
+          for (const path of ["client/Gw.snapshot", "game/", "launcher/"])
+            results.push((await pluginSession.fetch(`moxi://app/${path}`)).status);
+          const page = await pluginSession.fetch("moxi://app/plugin-host/");
+          return {
+            denied: results,
+            host: page.status,
+            csp: page.headers.get("Content-Security-Policy"),
+          };
+        }),
+      ).toEqual({
+        denied: [404, 404, 404],
+        host: 200,
+        csp: "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; worker-src data:; connect-src 'none'",
+      });
     });
   } finally {
-    await application?.close();
     await new Promise<void>((done, reject) =>
       patch.close((error) => (error ? reject(error) : done())),
     );
-    await rm(data, { recursive: true, force: true });
   }
 });

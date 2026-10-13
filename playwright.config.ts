@@ -1,11 +1,13 @@
+import { stageBudget } from "./e2e/budget.ts";
 import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./e2e",
   testMatch: "**/*.e2e.ts",
-  outputDir: ".evidence/c2/playwright",
+  outputDir: ".evidence/t1/playwright",
   workers: 1,
-  timeout: 180_000,
-  expect: { timeout: 30_000 },
+  timeout: 12 * stageBudget,
+  expect: { timeout: stageBudget },
+  use: { actionTimeout: stageBudget, navigationTimeout: stageBudget },
   reporter: "list",
 });

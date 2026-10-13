@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { stageBudget } from "../e2e/budget.ts";
 import { chromium, type Page } from "@playwright/test";
 
 const root = resolve(import.meta.dirname, "..");
@@ -39,8 +40,8 @@ async function drive() {
       !("port" in data) ||
       typeof data.port !== "number" ||
       !Number.isInteger(data.port) ||
-      data.port < 4620 ||
-      data.port > 4629
+      data.port < 1 ||
+      data.port > 65535
     )
       throw new Error("Invalid CDP port");
     port = data.port;
@@ -50,7 +51,7 @@ async function drive() {
     );
   }
   const browser = await chromium
-    .connectOverCDP(`http://127.0.0.1:${port}`, { timeout: 30_000 })
+    .connectOverCDP(`http://127.0.0.1:${port}`, { timeout: stageBudget })
     .catch(() => {
       throw new Error(
         `Dev app is not running at CDP port ${port}. Start pnpm dev; use the same MOXI_DATA_DIR.`,
@@ -66,10 +67,11 @@ async function drive() {
       return;
     }
     const page = pages.find((page) => windowKind(page) === kind);
+    page?.setDefaultTimeout(stageBudget);
     if (!page) throw new Error(`The ${kind} window is not open.`);
     if (command === "screenshot") await page.screenshot({ path: value });
     else if (command === "key") await page.keyboard.press(value ?? "");
-    else await page.getByText(value ?? "", { exact: true }).click({ timeout: 5000 });
+    else await page.getByText(value ?? "", { exact: true }).click({ timeout: stageBudget });
   } finally {
     // Closing a CDP connection disconnects the driver and leaves the Dev app running.
     await browser.close();
