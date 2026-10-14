@@ -1,5 +1,8 @@
 name: probe-PB7-PB9
 
+# Measurements are done (CI runs 38639331804, 38640183652, 38640655449, 38643059724). Every job is off so a push
+# cannot spend runner minutes; remove the `if: false` lines to measure again.
+
 on:
   pull_request:
     paths: ["probes/PB7-PB9/**", ".github/workflows/probe-PB7-PB9.yml"]
@@ -13,6 +16,7 @@ env:
 
 jobs:
   ps-selftest:
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -91,6 +95,7 @@ jobs:
           if-no-files-found: warn
 
   pb9-windows:
+    if: false
     needs: ps-selftest
     runs-on: windows-latest
     timeout-minutes: 20
@@ -116,6 +121,7 @@ jobs:
           if-no-files-found: warn
 
   pb7-windows:
+    if: false
     needs: ps-selftest
     runs-on: windows-latest
     timeout-minutes: 25
