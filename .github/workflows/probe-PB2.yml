@@ -33,7 +33,12 @@ jobs:
       # Run sandboxed like players: Ubuntu 24.04 blocks unprivileged user namespaces by default,
       # and the npm SUID helper is not root-owned, so allow the namespace sandbox.
       - if: runner.os == 'Linux'
-        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+        run: |
+          echo "core_pattern was: $(cat /proc/sys/kernel/core_pattern); suid_dumpable was: $(cat /proc/sys/fs/suid_dumpable); ulimit -c: $(ulimit -c)"
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          # Run 2 lost the runner to a full disk; never write core dumps of multi-GB processes.
+          sudo sysctl -w kernel.core_pattern='|/bin/false'
+          df -h /
       - name: Environment
         shell: bash
         run: |
