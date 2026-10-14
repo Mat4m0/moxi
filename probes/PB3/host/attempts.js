@@ -264,6 +264,31 @@ export function makeAttempts(env) {
         }),
       );
     },
+    storageBuckets: async () => {
+      if (!g.navigator?.storageBuckets) return absent("navigator.storageBuckets");
+      await race(navigator.storageBuckets.open("pb3-probe"));
+      return ok("bucket opened");
+    },
+    // Device access (not network, but a way to reach hardware without Main)
+    deviceApis: async () => {
+      const results = [];
+      let reachable = false;
+      for (const name of ["usb", "hid", "serial"]) {
+        const api = g.navigator?.[name];
+        if (!api) {
+          results.push(`${name} undefined`);
+          continue;
+        }
+        try {
+          const devices = await race(api.getDevices(), 2000, `${name}.getDevices`);
+          reachable = true;
+          results.push(`${name}.getDevices returned ${devices.length}`);
+        } catch (error) {
+          results.push(`${name}.getDevices threw ${error?.name}`);
+        }
+      }
+      return { outcome: reachable ? "succeeded" : "threw", detail: results.join("; ") };
+    },
     // Code generation
     eval: async () => ok(`value ${g.eval("40 + 2")}`),
     newFunction: async () => ok(`value ${new Function("return 42")()}`),

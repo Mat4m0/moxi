@@ -48,16 +48,22 @@ function emit(line) {
 // Listener hits are attributed to the attempt Main is running when they arrive. Main waits
 // for the listeners to go quiet before it starts the next attempt.
 let label = "startup";
-let lastListenerEvent = 0;
-async function settle() {
-  const started = Date.now();
+let lastNetworkEvent = 0;
+// An attempt that reached a listener may keep retransmitting (QUIC, TLS), so it gets a
+// longer quiet window before the next attempt starts.
+async function settle(attemptStarted) {
   await sleep(settleMs);
-  while (Date.now() - lastListenerEvent < settleMs && Date.now() - started < 8000) await sleep(100);
+  if (lastNetworkEvent < attemptStarted) return;
+  const started = Date.now();
+  while (Date.now() - lastNetworkEvent < 2500 && Date.now() - started < 12000) await sleep(100);
+}
+function networkCounter() {
+  lastNetworkEvent = Date.now();
+  return counter();
 }
 const hits = new Map();
 const emitted = new Map();
 function counter(key = label) {
-  if (key === label) lastListenerEvent = Date.now();
   let entry = hits.get(key);
   if (!entry) {
     entry = {
@@ -101,7 +107,7 @@ function take(key) {
 }
 
 const httpServer = http.createServer((request, response) => {
-  const entry = counter();
+  const entry = networkCounter();
   entry.httpRequests++;
   push(entry.httpPaths, `${request.method} ${request.url}`);
   let bytes =
@@ -131,7 +137,7 @@ const httpServer = http.createServer((request, response) => {
   });
 });
 httpServer.on("upgrade", (request, socket) => {
-  const entry = counter();
+  const entry = networkCounter();
   entry.wsUpgrades++;
   push(entry.httpPaths, `UPGRADE ${request.url}`);
   socket.on("error", () => {});
@@ -149,7 +155,7 @@ httpServer.on("upgrade", (request, socket) => {
 // ClientHello or a TURN Allocate request is enough to register as egress.
 function byteCounter(prefix) {
   return net.createServer((socket) => {
-    const entry = counter();
+    const entry = networkCounter();
     entry[`${prefix}Connections`]++;
     socket.on("error", () => {});
     socket.on("data", (chunk) => (entry[`${prefix}Bytes`] += chunk.length));
@@ -159,7 +165,7 @@ function byteCounter(prefix) {
 function datagramCounter(prefix) {
   const socket = dgram.createSocket("udp4");
   socket.on("message", (message) => {
-    const entry = counter();
+    const entry = networkCounter();
     entry[`${prefix}Datagrams`]++;
     entry[`${prefix}Bytes`] += message.length;
   });
@@ -301,17 +307,19 @@ async function runConfig(config, ports) {
     const names = await exec(window, `window.pb3.names(${JSON.stringify(context)})`);
     for (const name of names) {
       label = `${config.name}/${context}/${name}`;
+      const attemptStarted = Date.now();
       let result;
       try {
         result = await exec(window, `window.pb3.run(${JSON.stringify(context)}, ${JSON.stringify(name)})`);
       } catch (error) {
         result = { outcome: "harnessError", detail: String(error) };
       }
-      await settle();
+      await settle(attemptStarted);
       emit({ kind: "attempt", config: config.name, context, attempt: name, ...result, hits: take(label) });
     }
   }
   label = `${config.name}/main/sessionFetch`;
+  const fetchStarted = Date.now();
   let fetched;
   try {
     const response = await target.fetch(`http://127.0.0.1:${ports.http}/${label}`);
@@ -319,7 +327,7 @@ async function runConfig(config, ports) {
   } catch (error) {
     fetched = { outcome: "threw", detail: `${error?.name}: ${error?.message}`.slice(0, 300) };
   }
-  await settle();
+  await settle(fetchStarted);
   emit({ kind: "attempt", config: config.name, context: "main", attempt: "sessionFetch", ...fetched, hits: take(label) });
   label = `${config.name}/afterClose`;
   window.destroy();
