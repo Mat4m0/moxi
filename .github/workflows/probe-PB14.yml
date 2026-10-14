@@ -1,0 +1,70 @@
+name: probe-PB14
+
+# Architecture probe PB14 (two game partitions at once, each with its own moxi protocol handler).
+# Lives only on the draft PR branch probe/PB14. Fixture client only: no ArenaNet files, no login.
+on:
+  pull_request:
+    paths: ["probes/PB14/**", ".github/workflows/probe-PB14.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: probe-PB14-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pb14:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      PB14_RUNNER: ubuntu-24.04 (github-hosted, 2 vCPU)
+      PB14_FAST: "0"
+      PB14_PLAN: "partitioned:a shared:b"
+      PB14_S0: "3"
+      PB14_S1: "30"
+      PB14_S2: "30"
+      PB14_S3: "3"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install-deps chromium
+      # Ubuntu 24.04 blocks unprivileged user namespaces by default and the npm SUID helper is not
+      # root-owned, so allow the namespace sandbox (the renderer sandbox stays on, like the product).
+      - name: Allow the Chromium namespace sandbox and keep the disk safe
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          sudo sysctl -w kernel.core_pattern='|/bin/false'
+      - name: Keep ArenaNet unreachable (the fixture client is the only game)
+        run: |
+          echo "127.0.0.1 patching.1.arenanetworks.com" | sudo tee -a /etc/hosts
+          echo "::1 patching.1.arenanetworks.com" | sudo tee -a /etc/hosts
+      - name: Build the game renderer, the preloads and the probe Main
+        run: |
+          pnpm --filter @moxi/game exec vp build
+          pnpm --filter @moxi/desktop exec vp pack
+          (cd probes/PB14 && ../../node_modules/.bin/vp pack)
+      - name: Node selftest of the generation seeding and the client routes
+        run: node probes/PB14/selftest.ts
+      - name: Environment
+        run: |
+          uname -a; lscpu | grep -E "Model name|^CPU\(s\)|Thread"; free -m
+          cat /etc/os-release | head -3
+          echo "userns restriction: $(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns)"
+      - name: Run PB14 launches under xvfb
+        run: bash probes/PB14/run.sh
+      - name: Summaries (JSON lines)
+        if: always()
+        run: node probes/PB14/summarize.mjs pb14-out
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pb14-linux
+          path: pb14-out/
+          retention-days: 14
+          if-no-files-found: warn
