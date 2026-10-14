@@ -30,7 +30,48 @@ function track(record, message) {
     if (resolve) resolve(message.ms);
   } else if (message.t === "error") {
     totals.errors++;
+  } else if (message.t === "heap") {
+    record.heap = message;
+    if (record.heapDone) record.heapDone();
+  } else if (message.t === "gced") {
+    record.gced = message.ok;
+    if (record.gcDone) record.gcDone();
   }
+}
+
+const pageMemory = () => {
+  const m = performance.memory;
+  return m ? { used: m.usedJSHeapSize, total: m.totalJSHeapSize } : null;
+};
+// Diagnostics: JS heap of the page and of every worker; forced GC everywhere.
+async function ask(kind, doneKey, timeoutMs) {
+  await Promise.all(
+    [...workers.values()].map(
+      (record) =>
+        new Promise((resolve) => {
+          record[doneKey] = resolve;
+          record.worker.postMessage({ t: kind });
+          setTimeout(resolve, timeoutMs);
+        }),
+    ),
+  );
+}
+async function heap() {
+  await ask("heap", "heapDone", 3000);
+  const list = [...workers.values()].map((r) => r.heap).filter(Boolean);
+  api.emit("heap", {
+    page: pageMemory(),
+    workers: list.length,
+    workersUsed: list.reduce((a, h) => a + h.used, 0),
+    workersTotal: list.reduce((a, h) => a + h.total, 0),
+  });
+}
+async function forceGc() {
+  const pageGc = typeof gc === "function";
+  if (pageGc) gc();
+  await ask("gc", "gcDone", 10000);
+  const worked = [...workers.values()].filter((r) => r.gced).length;
+  api.emit("gc-done", { pageGc, workersGced: worked, workers: workers.size });
 }
 
 const EMPTY_WORKER =
@@ -207,6 +248,8 @@ async function init() {
   bundles = await api.invoke("bundles");
   api.on("spawn", (cmd) => void spawn(cmd));
   api.on("counters", () => api.emit("counters", { ...totals }));
+  api.on("heap", () => void heap());
+  api.on("gc", () => void forceGc());
   api.on("size-test", (cmd) => void sizeTest(cmd));
   api.on("boot-test", (cmd) => void bootTest(cmd));
   api.emit("host-ready", { href: location.href, origin: String(location.origin) });

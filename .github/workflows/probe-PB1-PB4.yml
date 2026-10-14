@@ -66,9 +66,9 @@ jobs:
             echo "PROBE_SWITCHES=no-sandbox" >> "$GITHUB_ENV"
           fi
       - name: PB1 cases
-        env:
-          PROBE_MODE: pb1
-        run: xvfb-run --auto-servernum pnpm exec electron probes/PB1-PB4/main.cjs
+        run: |
+          export PROBE_MODE="$(jq -r '.pb1Mode // "pb1"' probes/PB1-PB4/run-config.json)"
+          xvfb-run --auto-servernum pnpm exec electron probes/PB1-PB4/main.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

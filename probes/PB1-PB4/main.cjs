@@ -23,6 +23,11 @@ fs.mkdirSync(OUT, { recursive: true });
 for (const name of (process.env.PROBE_SWITCHES || "").split(",").filter(Boolean)) {
   app.commandLine.appendSwitch(name);
 }
+if (MODE === "pb1-long") {
+  // Growth check only: exact JS heap sizes and a gc() in every isolate.
+  app.commandLine.appendSwitch("js-flags", "--expose-gc");
+  app.commandLine.appendSwitch("enable-precise-memory-info");
+}
 app.enableSandbox();
 protocol.registerSchemesAsPrivileged([
   {
@@ -371,6 +376,58 @@ async function runPB1() {
   if (cases.some((c) => c.error)) throw new Error("some PB1 cases failed");
 }
 
+// Growth check: long observation with JS heap sizes, a forced GC, then regrowth.
+async function sampleWithHeap(host, seconds, heapEvery, out, label) {
+  const start = Date.now();
+  for (let i = 0; i < seconds; i++) {
+    const wait = start + i * 1000 - Date.now();
+    if (wait > 0) await sleep(wait);
+    const sample = sampleProcess(host.pid);
+    out[label].push(sample.privateKiB);
+    if (heapEvery && i % heapEvery === 0) {
+      host.send("heap");
+      const h = await host.waitEvent("heap", 15000);
+      out.heap.push({ phase: label, at: out[label].length - 1, ...h });
+    }
+  }
+}
+
+async function pb1LongCase(spec, cfg) {
+  const { P, S, mix = "default", observeSeconds, regrowSeconds } = spec;
+  const name = `P=${P},S=${S}${mix === "default" ? "" : ` [${mix}]`} long`;
+  const rec = { name, P, S, mix, observeSeconds, regrowSeconds, observe: [], afterGc: [], regrow: [], heap: [] };
+  let host;
+  try {
+    host = await openHost(`pb1-long-${P}-${S}`);
+    if (P > 0) {
+      host.send("spawn", { plugins: plan(P, mix), sessions: S, sequential: false });
+      const spawned = await host.waitEvent("spawned", 240000);
+      rec.spawnFailures = spawned.failures;
+    }
+    await sleep(cfg.warmupMs);
+    await sampleWithHeap(host, observeSeconds, cfg.heapEverySeconds, rec, "observe");
+    host.send("gc");
+    rec.gc = await host.waitEvent("gc-done", 30000);
+    await sleep(cfg.gcSettleMs);
+    await sampleWithHeap(host, cfg.afterGcSamples, cfg.afterGcSamples - 1, rec, "afterGc");
+    await sampleWithHeap(host, regrowSeconds, cfg.heapEverySeconds, rec, "regrow");
+  } catch (error) {
+    rec.error = String(error.message);
+  } finally {
+    if (host) await closeHost(host);
+  }
+  emit({ pb1Long: { name, error: rec.error, observeLast: rec.observe.slice(-3), afterGc: rec.afterGc.slice(-3), gc: rec.gc } });
+  return rec;
+}
+
+async function runPB1Long() {
+  const cfg = CONFIG.long;
+  const cases = [];
+  for (const spec of cfg.cases) cases.push(await pb1LongCase(spec, cfg));
+  writeOut("pb1-long-raw.json", { probe: "PB1", part: "growth-check", env: collectEnv(), config: cfg, cases });
+  if (cases.some((c) => c.error)) throw new Error("some growth-check cases failed");
+}
+
 // ---------------------------------------------------------------- PB4 size
 
 async function sizeAttempt(form, bytes, cfg, { memory }) {
@@ -645,6 +702,7 @@ app.whenReady().then(async () => {
     emit({ env: collectEnv() });
     await runDiag();
     if (MODE === "pb1") await runPB1();
+    else if (MODE === "pb1-long") await runPB1Long();
     else if (MODE === "pb4-size") await runPB4Size();
     else if (MODE === "pb4-boot") await runPB4Boot();
     clearTimeout(watchdog);

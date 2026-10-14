@@ -251,6 +251,14 @@ globalThis.__moxiBoot = function __moxiBoot(factory) {
         s.apps.push(app);
       }
       post({ t: "opened", sid: m.sid, ms: performance.now() - t0 });
+    } else if (m.t === "heap") {
+      // Diagnostic only (PB1 growth check).
+      const pm = performance.memory;
+      post({ t: "heap", used: pm ? pm.usedJSHeapSize : -1, total: pm ? pm.totalJSHeapSize : -1 });
+    } else if (m.t === "gc") {
+      const ok = typeof gc === "function";
+      if (ok) gc();
+      post({ t: "gced", ok });
     } else if (m.t === "ack") {
       const s = sessions.get(m.sid);
       if (s) s.ack();

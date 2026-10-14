@@ -1,5 +1,5 @@
 {
-  "tag": "steady",
+  "tag": "growth",
   "jobs": [
     "pb1"
   ],
@@ -73,5 +73,47 @@
   "launcher": {
     "warmupMs": 10000,
     "samples": 60
+  },
+  "pb1Mode": "pb1-long",
+  "long": {
+    "warmupMs": 10000,
+    "heapEverySeconds": 10,
+    "gcSettleMs": 3000,
+    "afterGcSamples": 10,
+    "cases": [
+      {
+        "P": 0,
+        "S": 0,
+        "observeSeconds": 60,
+        "regrowSeconds": 30
+      },
+      {
+        "P": 10,
+        "S": 1,
+        "observeSeconds": 480,
+        "regrowSeconds": 150
+      },
+      {
+        "P": 10,
+        "S": 1,
+        "mix": "b",
+        "observeSeconds": 300,
+        "regrowSeconds": 60
+      },
+      {
+        "P": 10,
+        "S": 1,
+        "mix": "c",
+        "observeSeconds": 300,
+        "regrowSeconds": 60
+      },
+      {
+        "P": 10,
+        "S": 1,
+        "mix": "a",
+        "observeSeconds": 180,
+        "regrowSeconds": 30
+      }
+    ]
   }
 }
