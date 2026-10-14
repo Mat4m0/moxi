@@ -55,7 +55,7 @@ function proc(pid) {
   };
   const status = read("status");
   const field = (n) => new RegExp(`^${n}:\\s*(.*)$`, "m").exec(status)?.[1] ?? null;
-  const cmdline = read("cmdline").split("\0").filter(Boolean);
+  const cmdline = read("cmdline").split(/[\0 ]/).filter(Boolean);
   const stat = read("stat");
   const ppid = Number(stat.slice(stat.lastIndexOf(")") + 2).split(" ")[1]);
   return {
@@ -155,7 +155,9 @@ const sandboxLines = lines
   .slice(0, 12)
   .map((l) => l.slice(0, 300));
 const renderersMain = (hook?.processes ?? []).filter((p) => p.type === "Tab");
-const renderersExternal = (external ?? []).filter((p) => p.typeArg === "--type=renderer");
+const renderersExternal = (external ?? []).filter(
+  (p) => p.typeArg === "--type=renderer" || renderersMain.some((m) => m.pid === p.pid),
+);
 const mainExternal = (external ?? []).find((p) => p.pid === hook?.mainPid);
 const summary = {
   probe: "PB10",
@@ -167,12 +169,16 @@ const summary = {
   hookSeenBeforeExit,
   hookError: hook?.error ?? null,
   noSandboxSwitch: hook?.noSandboxSwitch ?? null,
+  noSandboxSwitchBeforeEnableSandbox: hook?.noSandboxSwitchBeforeEnableSandbox ?? null,
+  argvNoSandbox: hook?.argvNoSandbox ?? null,
   mainArgvSwitches: hook?.argvSwitches ?? null,
   mainUserNsEqualsRunner: mainExternal ? mainExternal.userNs === readlinkSync("/proc/self/ns/user") : null,
   renderers: renderersMain.map((p) => ({
     window: p.window,
     seccomp: p.seccomp,
     noSandboxArg: p.noSandboxArg,
+    typeArg: p.typeArg,
+    ownNetNs: hook?.main ? p.netNs !== hook.main.netNs : null,
     ownUserNs: hook?.main ? p.userNs !== hook.main.userNs : null,
     ownPidNs: hook?.main ? p.pidNs !== hook.main.pidNs : null,
     sandboxedField: p.sandboxedField,
@@ -180,7 +186,8 @@ const summary = {
   otherProcesses: (hook?.processes ?? [])
     .filter((p) => p.type !== "Tab")
     .map((p) => `${p.type}${p.serviceName ? `/${p.serviceName}` : ""}:seccomp=${p.seccomp},nosb=${p.noSandboxArg},field=${p.sandboxedField}`),
-  externalRenderers: renderersExternal.map((p) => ({ seccomp: p.seccomp, noSandboxArg: p.noSandboxArg, apparmor: p.apparmor })),
+  externalRenderers: renderersExternal.map((p) => ({ pid: p.pid, typeArg: p.typeArg, seccomp: p.seccomp, noSandboxArg: p.noSandboxArg, apparmor: p.apparmor })),
+  externalOthers: (external ?? []).filter((p) => !renderersExternal.includes(p)).map((p) => `${p.typeArg ?? p.comm}:seccomp=${p.seccomp},nosb=${p.noSandboxArg}`),
   externalAgrees:
     hook && external
       ? renderersMain.every((m) => renderersExternal.some((e) => e.pid === m.pid && e.seccomp === m.seccomp)) &&
@@ -192,6 +199,7 @@ const summary = {
   workerNames: hook?.workerNames ?? null,
   cdpError: hook?.cdpError ?? null,
   refusalRule: hook?.refusalRule ?? null,
+  namespaceRule: hook?.namespaceRule ?? null,
   readiness: hook?.readiness ?? null,
   chromeSandboxPage: typeof hook?.chromeSandboxPage === "string" ? hook.chromeSandboxPage.replace(/\s+/g, " ").slice(0, 600) : null,
   sandboxLogLines: sandboxLines,

@@ -16,6 +16,10 @@ replaceOnce(
   electronImport + 'import { pb10Probe } from "../../../../probes/PB10/main-hook.ts";\n',
 );
 replaceOnce(
+  "app.enableSandbox();\n",
+  'const pb10NoSandboxBeforeEnable = app.commandLine.hasSwitch("no-sandbox");\napp.enableSandbox();\n',
+);
+replaceOnce(
   "      showLauncher();\n    })\n",
   `      showLauncher();
       if (process.env.MOXI_PROBE_PB10)
@@ -32,6 +36,7 @@ replaceOnce(
             reveal(game);
           },
           readiness: () => readiness.current(),
+          noSandboxBeforeEnable: pb10NoSandboxBeforeEnable,
         });
     })
 `,

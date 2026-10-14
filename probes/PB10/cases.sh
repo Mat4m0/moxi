@@ -3,9 +3,9 @@
 set -u
 R="${PB10_RESULTS:?}"
 mkdir -p "$R"
-DEB=$(ls out/legacy/*.deb | head -1)
-AI_LEGACY=$(ls out/legacy/*.AppImage | head -1)
-AI_STATIC=$(ls out/static/*.AppImage | head -1)
+DEB=$(ls "$PWD"/out/legacy/*.deb | head -1)
+AI_LEGACY=$(ls "$PWD"/out/legacy/*.AppImage | head -1)
+AI_STATIC=$(ls "$PWD"/out/static/*.AppImage | head -1)
 chmod +x "$AI_LEGACY" "$AI_STATIC"
 run() { node probes/PB10/run.mjs "$@" || echo "PB10 driver failed for $1"; }
 
@@ -32,7 +32,7 @@ for pair in "legacy:$AI_LEGACY" "static:$AI_STATIC"; do
 done
 
 echo "::group::install deb"
-sudo apt-get install -y "./$DEB"
+sudo apt-get install -y "$DEB"
 ls -l /opt/Moxi/chrome-sandbox /etc/apparmor.d/moxi
 cat /etc/apparmor.d/moxi
 sudo aa-status | grep -n -B2 -A2 moxi || echo "moxi profile not listed"
@@ -48,6 +48,10 @@ run appimage-static-default -- "$AI_STATIC"
 # 2. .deb with its profile removed.
 sudo apparmor_parser -R /etc/apparmor.d/moxi
 run deb-no-profile -- /opt/Moxi/moxi
+# 2b. What post-install does when root cannot create user namespaces: SUID helper.
+sudo chmod 4755 /opt/Moxi/chrome-sandbox
+run deb-no-profile-suid-helper -- /opt/Moxi/moxi
+sudo chmod 0755 /opt/Moxi/chrome-sandbox
 
 # 3. Unprivileged user namespaces allowed system-wide (profile still removed).
 sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0

@@ -12,6 +12,7 @@ type Options = {
   windows: () => { kind: Kind; contents: WebContents }[];
   openGame: () => void;
   readiness: () => unknown;
+  noSandboxBeforeEnable: boolean;
 };
 
 const sleep = (ms: number) => new Promise((done) => setTimeout(done, ms));
@@ -33,7 +34,7 @@ function proc(pid: number) {
   };
   const status = read("status");
   const field = (name: string) => new RegExp(`^${name}:\\s*(.*)$`, "m").exec(status)?.[1] ?? null;
-  const cmdline = read("cmdline").split("\0").filter(Boolean);
+  const cmdline = read("cmdline").split(/[\0 ]/).filter(Boolean);
   return {
     seccomp: field("Seccomp"),
     seccompFilters: field("Seccomp_filters"),
@@ -104,6 +105,8 @@ export function pb10Probe(options: Options) {
       result.workersEver = workersEver.size;
       result.workerNames = [...workers.values()].map((name) => name.slice(0, 60));
       result.noSandboxSwitch = app.commandLine.hasSwitch("no-sandbox");
+      result.noSandboxSwitchBeforeEnableSandbox = options.noSandboxBeforeEnable;
+      result.argvNoSandbox = process.argv.includes("--no-sandbox");
       result.argvSwitches = process.argv.slice(1).filter((arg) => arg.startsWith("--"));
       result.mainPid = process.pid;
       result.main = proc(process.pid);
@@ -126,6 +129,18 @@ export function pb10Probe(options: Options) {
         pluginHostPid: pluginHostPid ?? null,
         pluginHostSeccomp: hostProc?.seccomp ?? null,
         wouldRefuseNonOfficial: result.noSandboxSwitch === true || hostProc?.seccomp !== "2",
+      };
+      // Candidate rule: layer 1 (namespace or SUID sandbox) gives the host its own PID namespace.
+      const mainProc = proc(process.pid);
+      result.namespaceRule = {
+        hostOwnPidNs: hostProc ? hostProc.pidNs !== mainProc.pidNs : null,
+        hostOwnNetNs: hostProc ? hostProc.netNs !== mainProc.netNs : null,
+        hostOwnUserNs: hostProc ? hostProc.userNs !== mainProc.userNs : null,
+        wouldRefuseNonOfficial:
+          result.argvNoSandbox === true ||
+          hostProc?.seccomp !== "2" ||
+          !hostProc ||
+          hostProc.pidNs === mainProc.pidNs,
       };
       // chrome://sandbox, when Electron serves it, is Chromium's own verdict.
       try {
