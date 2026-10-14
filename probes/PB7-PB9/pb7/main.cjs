@@ -14,6 +14,10 @@ const { analyze, visibilityPerPhase } = require("../lib/pb7-analysis.cjs");
 
 const VARIANT = process.env.PB7_VARIANT || "false";
 const SCALE = Number(process.env.PB7_SCALE || "1");
+// PB7_HIDE=1: show every host once and hide it again after load, so that Chromium really treats
+// the page as hidden (a window created with show:false may still report "visible").
+const HIDE = process.env.PB7_HIDE === "1";
+const TAG = `${VARIANT}${HIDE ? "-hide" : ""}`;
 const OUT = process.env.PB7_OUT || path.join(__dirname, "..", "out");
 const N_HOSTS = 2;
 const PLUGINS = 5; // per host
@@ -56,7 +60,7 @@ function beginPhase(name) {
   const t = Date.now();
   if (phases.length) phases[phases.length - 1].end = t;
   phases.push({ name, start: t, end: null });
-  log("PB7_PHASE", { name, t, variant: VARIANT });
+  log("PB7_PHASE", { name, t, variant: TAG });
 }
 
 // Main-side sampling.
@@ -208,6 +212,12 @@ async function main() {
     ),
   ]);
   if (VARIANT === "reassert") for (const h of hosts) h.webContents.setBackgroundThrottling(false);
+  if (HIDE) {
+    for (const h of hosts) h.showInactive();
+    await sleep(500);
+    for (const h of hosts) h.hide();
+    await sleep(700);
+  }
 
   // Control ports (Main <-> each page) and links (game <-> each host) brokered once by Main.
   const gameControl = new MessageChannelMain();
@@ -233,6 +243,7 @@ async function main() {
   const env = {
     probe: "PB7",
     variant: VARIANT,
+    hideHosts: HIDE,
     scale: SCALE,
     platform: process.platform,
     arch: process.arch,
@@ -290,7 +301,7 @@ async function main() {
     groups: analyze({ phases, gameData, hostData, mainPongs, mainStops, mainTicks, loopLag, gameStates, cpu }),
   };
   fs.mkdirSync(OUT, { recursive: true });
-  fs.writeFileSync(path.join(OUT, `pb7-${process.platform}-${VARIANT}.json`), JSON.stringify(result, null, 1));
+  fs.writeFileSync(path.join(OUT, `pb7-${process.platform}-${TAG}.json`), JSON.stringify(result, null, 1));
   log("PB7_RESULT", result);
   clearTimeout(hard);
   app.exit(0);

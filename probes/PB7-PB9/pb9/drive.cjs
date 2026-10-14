@@ -28,7 +28,9 @@ const ALT = "AltLeft";
 const SHIFT = "ShiftLeft";
 const chord = (mods, key) => [...mods.map(D), D(key), U(key), ...[...mods].reverse().map(U)];
 
-const SWALLOWED = { mainDown: true, mainUp: true, pageDown: false, pageUp: false, reloaded: false };
+// After a handled key down Chromium drops the key up for Main and page alike, so only the key
+// down is required to reach Main.
+const SWALLOWED = { mainDown: true, pageDown: false, pageUp: false, reloaded: false };
 const PASSED = { mainDown: true, mainUp: true, pageDown: true, pageUp: true, reloaded: false };
 const swallowedFiring = (id) => ({ ...SWALLOWED, fired: [id] });
 const passedSilent = { ...PASSED, fired: [] };
@@ -43,7 +45,18 @@ const scenarios = {
     expect: {
       swallow: swallowedFiring("hub.toggle"),
       observe: { mainDown: true, mainUp: true, pageDown: true, pageUp: true, fired: [] },
-      "down-only": { mainDown: true, mainUp: true, pageDown: false, pageUp: true, fired: ["hub.toggle"] },
+      "down-only": { mainDown: true, pageDown: false, pageUp: false, fired: ["hub.toggle"] },
+      "swallow-unstick-up": { ...SWALLOWED, fired: ["hub.toggle"], stuckModifier: false },
+      "swallow-unstick-downup": { ...SWALLOWED, fired: ["hub.toggle"], stuckModifier: false },
+    },
+  },
+  "hub-rollover": {
+    // Another key goes down while R is held, so Chromium resumes key events and Main sees the R
+    // key up: the router must swallow it, otherwise the page gets a key up with no key down.
+    target: "KeyR", session: "world", steps: [D(CTRL), D("KeyR"), D("KeyA"), U("KeyR"), U("KeyA"), U(CTRL)],
+    expect: {
+      swallow: swallowedFiring("hub.toggle"),
+      "down-only": { mainDown: true, pageDown: false, pageUp: true, fired: ["hub.toggle"] },
     },
   },
   "hub-login": { target: "KeyR", session: "login", steps: chord([CTRL], "KeyR"), expect: { swallow: swallowedFiring("hub.toggle") } },
@@ -72,12 +85,36 @@ const scenarios = {
   "alt-a": { target: "KeyA", session: "world", steps: chord([ALT], "KeyA"), expect: { swallow: passedSilent } },
 };
 
-// Linux only: a German layout and a real AltGr key (ISO_Level3_Shift) to record what X11 sends.
-const deScenarios = {
-  "de-altgr-q": { target: "KeyQ", session: "world", steps: [D("AltGr"), D("KeyQ"), U("KeyQ"), U("AltGr")], keepLogs: true, expect: { swallow: passedSilent } },
-  "de-ctrl-altgr-r": { target: "KeyR", session: "world", steps: [D(CTRL), D("AltGr"), D("KeyR"), U("KeyR"), U("AltGr"), U(CTRL)], keepLogs: true, expect: { swallow: passedSilent } },
-  "de-ctrl-r": { target: "KeyR", session: "world", steps: chord([CTRL], "KeyR"), keepLogs: true, expect: { swallow: swallowedFiring("hub.toggle") } },
-};
+// Linux only: real layouts through `setxkbmap` and a real AltGr key (ISO_Level3_Shift), to record
+// what X11 sends. The naive run has no AltGraph tracking and shows whether AltGr+Ctrl+R matches.
+const layoutGroups = [
+  {
+    name: "de",
+    setxkbmap: ["de"],
+    scenarios: {
+      "de-altgr-q": { target: "KeyQ", session: "world", steps: [D("AltGr"), D("KeyQ"), U("KeyQ"), U("AltGr")], keepLogs: true, expect: { swallow: passedSilent } },
+      "de-ctrl-r": { target: "KeyR", session: "world", steps: chord([CTRL], "KeyR"), keepLogs: true, expect: { swallow: swallowedFiring("hub.toggle") } },
+      "de-ctrl-altgr-r": { target: "KeyR", session: "world", steps: [D(CTRL), D("AltGr"), D("KeyR"), U("KeyR"), U("AltGr"), U(CTRL)], keepLogs: true, modes: ["swallow-naive", "swallow"], expect: { swallow: passedSilent } },
+      "de-ctrl-altgr-k": { target: "KeyK", session: "world", steps: [D(CTRL), D("AltGr"), D("KeyK"), U("KeyK"), U("AltGr"), U(CTRL)], keepLogs: true, modes: ["swallow-naive", "swallow"], expect: { swallow: passedSilent } },
+    },
+  },
+  {
+    name: "fr",
+    setxkbmap: ["fr"],
+    scenarios: {
+      // AZERTY: the key that types "a" is the physical Q key.
+      "fr-ctrl-a": { target: "KeyQ", session: "world", steps: chord([CTRL], "KeyA"), keepLogs: true, expect: { swallow: passedSilent } },
+      "fr-ctrl-r": { target: "KeyR", session: "world", steps: chord([CTRL], "KeyR"), keepLogs: true, expect: { swallow: swallowedFiring("hub.toggle") } },
+    },
+  },
+  {
+    name: "us-altgr-intl",
+    setxkbmap: ["-layout", "us", "-variant", "altgr-intl"],
+    scenarios: {
+      "usintl-ctrl-altgr-r": { target: "KeyR", session: "world", steps: [D(CTRL), D("AltGr"), D("KeyR"), U("KeyR"), U("AltGr"), U(CTRL)], keepLogs: true, modes: ["swallow-naive", "swallow"], expect: { swallow: passedSilent } },
+    },
+  },
+];
 
 const KEYCODE = { ControlLeft: "Control", AltLeft: "Alt", AltRight: "Alt", ShiftLeft: "Shift", KeyR: "R", KeyK: "K", KeyA: "A", KeyQ: "Q", Digit1: "1" };
 const MODFLAG = { ControlLeft: "control", AltLeft: "alt", AltRight: "alt", ShiftLeft: "shift" };
@@ -130,6 +167,11 @@ function analyze(scn, snap) {
     pageDown: hit(page, isDown),
     pageUp: hit(page, isUp),
     pageSawModifier: page.some((e) => /^(Control|Alt|Shift)/.test(e.code)),
+    // The last Control event the page saw was a key down: a held-key ledger keeps it pressed.
+    stuckModifier: (() => {
+      const control = page.filter((e) => /^Control/.test(e.code));
+      return control.length > 0 && /down/i.test(control[control.length - 1].type);
+    })(),
     reloaded: snap.loads > snap.loadsAtReset,
     fired: snap.fired,
     swallowedKeyDown: snap.decisions.filter((d) => d.swallow && isDown(d)).length,
@@ -199,9 +241,10 @@ async function runLaunch(menu, os) {
         ? [["plain-r", ["observe"]], ["hub", ["observe", "swallow"]], ["hub-release-order", ["swallow"]], ["altgr", ["swallow"]]]
         : [
             ["plain-r", ["observe"]],
-            ["hub", ["observe", "swallow", "down-only"]],
+            ["hub", ["observe", "swallow", "down-only", "swallow-unstick-up", "swallow-unstick-downup"]],
+            ["hub-rollover", ["swallow", "down-only"]],
             ...Object.keys(scenarios)
-              .filter((id) => !["plain-r", "hub"].includes(id))
+              .filter((id) => !["plain-r", "hub", "hub-rollover"].includes(id))
               .map((id) => [id, ["swallow"]]),
           ];
 
@@ -218,15 +261,21 @@ async function runLaunch(menu, os) {
         }
       }
       if (pathName === "os" && menu === "null" && process.platform === "linux") {
-        try {
-          os.setLayout("de");
-          await sleep(300);
-          for (const [id, scn] of Object.entries(deScenarios)) {
-            await ctx.os.focus();
-            await runOne(ctx, "os", id, scn, "swallow");
+        for (const group of layoutGroups) {
+          try {
+            os.setLayout(group.setxkbmap);
+            await sleep(400);
+            for (const [id, scn] of Object.entries(group.scenarios)) {
+              for (const mode of scn.modes || ["swallow"]) {
+                await ctx.os.focus();
+                await runOne(ctx, "os", id, scn, mode);
+              }
+            }
+          } catch (error) {
+            emit({ kind: "layout-error", group: group.name, error: String(error.message).slice(0, 300) });
+          } finally {
+            os.setLayout(["us"]);
           }
-        } finally {
-          os.setLayout("us");
         }
       }
     }

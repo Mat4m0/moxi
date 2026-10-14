@@ -32,23 +32,30 @@ function matches(input, binding) {
 // Stateful router: swallows a matched key down, its auto-repeats, and its key up even when
 // the modifiers were released first. Plugin chords are live only while session === "world".
 class ChordRouter {
-  constructor({ bindings, downOnly = false }) {
+  // trackAltGraph: on Linux X11 AltGr arrives as its own key event (key "AltGraph", empty code)
+  // and the next key carries ctrl without alt, so only a held-key flag can tell AltGr+Ctrl+R
+  // from Ctrl+R. Reset it when the window loses focus, because a missed key up would leave it set.
+  constructor({ bindings, downOnly = false, trackAltGraph = true }) {
     this.bindings = bindings;
     this.downOnly = downOnly;
+    this.trackAltGraph = trackAltGraph;
     this.held = new Map(); // code -> binding id swallowed on key down
+    this.altGraphDown = false;
   }
 
   reset() {
     this.held.clear();
+    this.altGraphDown = false;
   }
 
   handle(input, ctx) {
     const type = input.type === "rawKeyDown" ? "keyDown" : input.type;
+    if (this.trackAltGraph && input.key === "AltGraph") this.altGraphDown = type === "keyDown";
     if (type === "keyDown") {
       if (this.held.has(input.code)) return { swallow: true, fire: null, why: "held-repeat" };
-      const hit = this.bindings.find(
-        (b) => matches(input, b) && (b.scope === "always" || ctx.session === "world"),
-      );
+      const hit = this.altGraphDown
+        ? undefined
+        : this.bindings.find((b) => matches(input, b) && (b.scope === "always" || ctx.session === "world"));
       if (!hit) return { swallow: false, fire: null, why: "no-match" };
       this.held.set(input.code, hit.id);
       return { swallow: true, fire: hit.id, why: "match" };

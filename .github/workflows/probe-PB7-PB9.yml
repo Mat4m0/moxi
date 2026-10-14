@@ -27,6 +27,8 @@ jobs:
       - run: sudo apt-get install -y openbox xdotool x11-xkb-utils
       - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - run: node --test probes/PB7-PB9/lib/chord.test.cjs
+      - name: Check the Windows key sender script with PowerShell 7 (compile, struct size, protocol)
+        run: PB9_PS_EXE=pwsh node probes/PB7-PB9/pb9/os-keys-selftest.cjs
       - name: PB9 (Electron under xvfb 1920x1080x24 with openbox)
         run: xvfb-run --auto-servernum -s "-screen 0 1920x1080x24" bash probes/PB7-PB9/ci/session.sh node probes/PB7-PB9/pb9/drive.cjs
         env:
@@ -44,7 +46,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: ["false", "default"]
+        include:
+          - { variant: "false", hide: "0", tag: "false" }
+          - { variant: "default", hide: "0", tag: "default" }
+          - { variant: "false", hide: "1", tag: "false-hide" }
+          - { variant: "default", hide: "1", tag: "default-hide" }
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -60,11 +66,12 @@ jobs:
         run: xvfb-run --auto-servernum -s "-screen 0 1920x1080x24" bash probes/PB7-PB9/ci/session.sh pnpm exec electron probes/PB7-PB9/pb7/main.cjs
         env:
           PB7_VARIANT: ${{ matrix.variant }}
+          PB7_HIDE: ${{ matrix.hide }}
           PB7_OUT: ${{ github.workspace }}/out
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: pb7-linux-${{ matrix.variant }}
+          name: pb7-linux-${{ matrix.tag }}
           path: out/
           if-no-files-found: warn
 
@@ -99,7 +106,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: ["false", "default"]
+        include:
+          - { variant: "false", hide: "0", tag: "false" }
+          - { variant: "default", hide: "0", tag: "default" }
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -112,10 +121,11 @@ jobs:
         run: pnpm exec electron probes/PB7-PB9/pb7/main.cjs
         env:
           PB7_VARIANT: ${{ matrix.variant }}
+          PB7_HIDE: ${{ matrix.hide }}
           PB7_OUT: ${{ github.workspace }}\out
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: pb7-windows-${{ matrix.variant }}
+          name: pb7-windows-${{ matrix.tag }}
           path: out/
           if-no-files-found: warn

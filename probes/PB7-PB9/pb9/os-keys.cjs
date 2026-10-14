@@ -64,8 +64,8 @@ function linuxKeys(title) {
         // Nothing was held.
       }
     },
-    setLayout(layout) {
-      execFileSync("setxkbmap", [layout]);
+    setLayout(args) {
+      execFileSync("setxkbmap", args);
     },
     async stop() {},
   };
@@ -87,7 +87,7 @@ function windowsKeys(title) {
     name: "SendInput",
     async start() {
       ps = spawn(
-        "powershell.exe",
+        process.env.PB9_PS_EXE || "powershell.exe",
         ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", path.join(__dirname, "sendkeys.ps1")],
         { stdio: ["pipe", "pipe", "pipe"] },
       );
@@ -130,4 +130,4 @@ function createOsKeys(title) {
   return null;
 }
 
-module.exports = { createOsKeys };
+module.exports = { createOsKeys, windowsKeys };

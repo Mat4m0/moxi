@@ -20,7 +20,10 @@ const bindings = [
 ];
 
 const st = {
-  mode: "observe", // observe | swallow | down-only
+  // observe | swallow | swallow-naive (no AltGraph tracking) | down-only (key up not swallowed)
+  // | swallow-unstick-up | swallow-unstick-downup (after a swallowed chord, send Control up
+  // through sendInputEvent, alone or after a synthetic Control down)
+  mode: "observe",
   session: "world", // login | charselect | world
   mainLog: [],
   pageLog: [],
@@ -50,6 +53,18 @@ function menuReport() {
   };
   walk(menu.items, []);
   return { top: menu.items.map((i) => i.label || i.role), reload: found.filter((f) => f.role === "reload" || /\bR$/.test(f.accelerator || "")), count: found.length };
+}
+
+// Chromium drops the key up (and char) events that follow a handled key down, up to the next key
+// down, so the page would keep believing that Control is held. These try to release it.
+function unstick(withDown) {
+  const key = mac ? "Meta" : "Control";
+  const flag = mac ? "meta" : "control";
+  setTimeout(() => {
+    const wc = win.webContents;
+    if (withDown) wc.sendInputEvent({ type: "keyDown", keyCode: key, modifiers: [flag, "isAutoRepeat"] });
+    wc.sendInputEvent({ type: "keyUp", keyCode: key, modifiers: [] });
+  }, 5);
 }
 
 function createWindow() {
@@ -91,7 +106,9 @@ function createWindow() {
     st.decisions.push({ t, type: input.type, code: input.code, swallow: d.swallow, fire: d.fire, why: d.why });
     if (d.fire) st.fired.push(d.fire);
     if (d.swallow) event.preventDefault();
+    if (d.fire && st.mode.startsWith("swallow-unstick")) unstick(st.mode.endsWith("downup"));
   });
+  win.on("blur", () => router.reset());
   return win.loadFile(path.join(__dirname, "game.html"));
 }
 
@@ -131,7 +148,7 @@ globalThis.pb9 = {
     st.decisions = [];
     st.fired = [];
     st.loadsAtReset = st.loads;
-    router = new ChordRouter({ bindings, downOnly: mode === "down-only" });
+    router = new ChordRouter({ bindings, downOnly: mode === "down-only", trackAltGraph: mode !== "swallow-naive" });
     return win.webContents.executeJavaScript(
       `document.getElementById("screen").textContent = "screen: ${session}"; true`,
     );

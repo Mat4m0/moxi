@@ -120,3 +120,26 @@ test("the fifth valid chord stays unbound (4 per install)", () => {
   assert.deepEqual(results.map((r) => r.ok), [true, true, true, true, false]);
   assert.equal(results[4].reason, "install-limit");
 });
+
+// Recorded in CI (run 1, Linux X11, `setxkbmap de`, xdotool): AltGr is its own key event with an
+// empty code; Ctrl+AltGr+R then arrives with control:true, alt:false and key "\u00b6".
+const x11 = {
+  ctrl: input({ key: "Control", code: "ControlLeft", control: true, location: 1, modifiers: ["control", "left"] }),
+  altGr: input({ key: "AltGraph", code: "", control: true, modifiers: ["control"] }),
+  r: input({ key: "\u00b6", code: "KeyR", control: true, modifiers: ["control"] }),
+};
+test("Linux X11 Ctrl+AltGr+R: a naive matcher fires, the AltGraph-tracking router does not", () => {
+  const naive = new ChordRouter({ bindings: [hubWin], trackAltGraph: false });
+  const guarded = new ChordRouter({ bindings: [hubWin] });
+  const run = (router) => [x11.ctrl, x11.altGr, x11.r].map((i) => router.handle(i, { session: "world" }).fire);
+  assert.deepEqual(run(naive), [null, null, "hub.toggle"]);
+  assert.deepEqual(run(guarded), [null, null, null]);
+});
+
+test("AltGraph key up re-enables the chord", () => {
+  const router = new ChordRouter({ bindings: [hubWin] });
+  const ctx = { session: "world" };
+  router.handle(x11.altGr, ctx);
+  router.handle(input({ type: "keyUp", key: "AltGraph", code: "" }), ctx);
+  assert.equal(router.handle(input({ key: "r", code: "KeyR", control: true }), ctx).fire, "hub.toggle");
+});
