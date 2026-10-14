@@ -84,6 +84,7 @@ test("shell keeps one launcher, rejects launcher actions from the game, and quit
       executablePath: executable,
       args: [appPath],
       env,
+      chromiumSandbox: true,
     })
     .catch(async (error: unknown) => {
       await rm(data, { recursive: true, force: true });
@@ -221,8 +222,14 @@ test("shell keeps one launcher, rejects launcher actions from the game, and quit
           .find((win) => win.webContents.getURL() === "moxi://app/launcher/")
           ?.hide();
       });
-      second = spawn(executable, [appPath], { env, stdio: "ignore", timeout: 30_000 });
-      expect(await exited(second)).toEqual({ code: 0, signal: null });
+      second = spawn(executable, [appPath], {
+        env,
+        stdio: ["ignore", "ignore", "pipe"],
+        timeout: 30_000,
+      });
+      let errors = "";
+      second.stderr?.setEncoding("utf8").on("data", (text: string) => (errors += text));
+      expect(await exited(second), errors).toEqual({ code: 0, signal: null });
       console.log("Second launch: exit 0, signal null");
       await expect
         .poll(() =>
@@ -260,6 +267,7 @@ test("shell keeps one launcher, rejects launcher actions from the game, and quit
         executablePath: executable,
         args: [appPath],
         env,
+        chromiumSandbox: true,
       });
       try {
         await expect
@@ -296,7 +304,7 @@ test("an offline fresh install refuses Play and offers repair", async ({ playwri
   const data = await mkdtemp(join(tmpdir(), "moxi-e2e-"));
   const env = await environment(data);
   const application = await playwright._electron
-    .launch({ executablePath: executable, args: [appPath], env })
+    .launch({ executablePath: executable, args: [appPath], env, chromiumSandbox: true })
     .catch(async (error: unknown) => {
       await rm(data, { recursive: true, force: true });
       throw error;
