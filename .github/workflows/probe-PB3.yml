@@ -34,7 +34,6 @@ jobs:
           if-no-files-found: warn
 
   windows:
-    if: false
     runs-on: windows-latest
     timeout-minutes: 25
     steps:
