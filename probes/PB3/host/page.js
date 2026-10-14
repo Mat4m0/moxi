@@ -126,8 +126,9 @@ window.pb3 = {
     };
   },
   names(context) {
-    if (context === "page") return page.names;
-    return [...page.names.filter((name) => !pageOnly.has(name)), "nestedTerminate"];
+    if (context === "page") return page.names.filter((name) => name !== "preludeDeletesWorker");
+    const shared = page.names.filter((name) => !pageOnly.has(name) && name !== "preludeDeletesWorker");
+    return [...shared, "nestedTerminate", "preludeDeletesWorker"];
   },
   async run(context, name) {
     let result;

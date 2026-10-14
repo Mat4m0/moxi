@@ -140,9 +140,12 @@ export function makeAttempts(env) {
       if (!has("WebTransport")) return absent("WebTransport");
       const transport = new WebTransport(`${quic}/webTransport`);
       transport.closed.catch(() => {});
-      await race(transport.ready, 3000, "WebTransport.ready");
-      transport.close();
-      return ok("ready");
+      try {
+        await race(transport.ready, 3000, "WebTransport.ready");
+        return ok("ready");
+      } finally {
+        transport.close();
+      }
     },
     rtcStunUdp: () => rtc([{ urls: `stun:127.0.0.1:${env.ports.stun}` }]),
     rtcTurnTcp: () =>
@@ -297,6 +300,35 @@ export function makeAttempts(env) {
         return { outcome: "present", detail: `permission ${Notification.permission}` };
       return { outcome: "present", detail: `requestPermission ${await race(Notification.requestPermission())}` };
     },
+    globalsInventory: async () => {
+      const names = new Set();
+      for (let scope = g; scope && scope !== Object.prototype; scope = Object.getPrototypeOf(scope))
+        for (const name of Object.getOwnPropertyNames(scope)) names.add(name);
+      const pattern =
+        /RTC|WebTransport|WebSocket|EventSource|XMLHttpRequest|^fetch|Worker|BroadcastChannel|importScripts|indexedDB|caches|Notification|WebAssembly|SharedArrayBuffer|Presentation|Bluetooth|USB|HID|Serial|NDEF|^GPU$|^eval$|^Function$/;
+      const navigatorNames = g.navigator
+        ? Object.getOwnPropertyNames(Object.getPrototypeOf(g.navigator)).filter((name) =>
+            /serviceWorker|locks|storage|sendBeacon|usb|hid|serial|bluetooth|gpu|mediaDevices|permissions/.test(name),
+          )
+        : [];
+      return {
+        outcome: "present",
+        detail: `globals ${[...names].filter((name) => pattern.test(name)).sort().join(",")}; navigator ${navigatorNames.sort().join(",")}`,
+      };
+    },
+    // Worker only, run last: what the runtime prelude would do before plugin code runs.
+    preludeDeletesWorker: async () => {
+      if (!has("Worker")) return absent("Worker");
+      const deleted = delete g.Worker;
+      const left = `delete returned ${deleted}; typeof Worker ${typeof g.Worker}; "Worker" in globalThis ${"Worker" in g}`;
+      try {
+        const Recovered = g.Worker ?? g.constructor?.Worker ?? Object.getPrototypeOf(g)?.Worker;
+        const worker = new Recovered("data:text/javascript,postMessage(1)");
+        return ok(`${left}; created ${typeof worker}`);
+      } catch (error) {
+        return { outcome: "threw", detail: `${left}; construct threw ${error?.name}` };
+      }
+    },
     // Page only (DOM): these stand in for an attacker in the host page's main world.
     img: async () => {
       if (!has("document")) return absent("document");
@@ -322,7 +354,7 @@ export function makeAttempts(env) {
       if (!has("document")) return absent("document");
       const link = document.createElement("link");
       link.rel = "preconnect";
-      link.href = `https://127.0.0.1:${env.ports.tls}`;
+      link.href = `http://127.0.0.1:${env.ports.tls}`;
       document.head.append(link);
       await sleep(1000);
       link.remove();

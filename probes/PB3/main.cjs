@@ -45,11 +45,19 @@ function emit(line) {
   console.log(`PB3 ${JSON.stringify(line)}`);
 }
 
-// Listener hits are attributed to the attempt Main is running when they arrive.
+// Listener hits are attributed to the attempt Main is running when they arrive. Main waits
+// for the listeners to go quiet before it starts the next attempt.
 let label = "startup";
+let lastListenerEvent = 0;
+async function settle() {
+  const started = Date.now();
+  await sleep(settleMs);
+  while (Date.now() - lastListenerEvent < settleMs && Date.now() - started < 8000) await sleep(100);
+}
 const hits = new Map();
 const emitted = new Map();
 function counter(key = label) {
+  if (key === label) lastListenerEvent = Date.now();
   let entry = hits.get(key);
   if (!entry) {
     entry = {
@@ -299,7 +307,7 @@ async function runConfig(config, ports) {
       } catch (error) {
         result = { outcome: "harnessError", detail: String(error) };
       }
-      await sleep(settleMs);
+      await settle();
       emit({ kind: "attempt", config: config.name, context, attempt: name, ...result, hits: take(label) });
     }
   }
@@ -311,7 +319,7 @@ async function runConfig(config, ports) {
   } catch (error) {
     fetched = { outcome: "threw", detail: `${error?.name}: ${error?.message}`.slice(0, 300) };
   }
-  await sleep(settleMs);
+  await settle();
   emit({ kind: "attempt", config: config.name, context: "main", attempt: "sessionFetch", ...fetched, hits: take(label) });
   label = `${config.name}/afterClose`;
   window.destroy();
@@ -367,7 +375,7 @@ async function main() {
   for (const config of configs) await runConfig(config, ports);
   label = "end";
   await sleep(1000);
-  emit({ kind: "summary", ...summarize() });
+  emit({ kind: "summary", elapsedMs: Math.round(performance.now()), ...summarize() });
   fs.mkdirSync(outDir, { recursive: true });
   const file = `results-${process.platform}.jsonl`;
   fs.writeFileSync(path.join(outDir, file), `${lines.map((line) => JSON.stringify(line)).join("\n")}\n`);
