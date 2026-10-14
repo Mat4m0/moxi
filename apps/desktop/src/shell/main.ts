@@ -134,8 +134,7 @@ function createWindow(kind: WindowKind) {
       nodeIntegration: false,
       // The client advances its main loop, including network delivery, on
       // animation frames; plugins must keep answering while the game is busy.
-      // Invisible background windows must still paint, or screenshots wait forever.
-      backgroundThrottling: kind === "launcher" && !background,
+      backgroundThrottling: kind === "launcher",
       webSecurity: true,
     },
   });
