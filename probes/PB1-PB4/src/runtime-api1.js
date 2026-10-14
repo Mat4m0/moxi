@@ -1,0 +1,202 @@
+// Runtime prototype for PB1/PB4: Vue runtime-core custom renderer that emits flat ops
+// (R7 3.2/3.3), handler de-duplication, signs freed on removal, one factory call per session.
+import {
+  createRenderer,
+  h,
+  ref,
+  shallowRef,
+  computed,
+  watchEffect,
+  defineComponent,
+  nextTick,
+  Fragment,
+  triggerRef,
+} from "@vue/runtime-core";
+
+const OP = {
+  CREATE: 1,
+  CREATE_TEXT: 2,
+  INSERT: 3,
+  REMOVE: 4,
+  SET_PROP: 5,
+  SET_EVENT: 6,
+  SET_TEXT: 7,
+  SET_ELEMENT_TEXT: 8,
+};
+const VUE = { h, ref, shallowRef, computed, watchEffect, defineComponent, nextTick, Fragment, triggerRef };
+let nextId = 1;
+
+class HostNode {
+  constructor(type) {
+    this.id = nextId++;
+    this.type = type;
+    this.parent = null;
+    this.children = [];
+    this.signs = null;
+  }
+}
+
+function freeSigns(node, handlers) {
+  if (node.signs) for (const key in node.signs) handlers.delete(node.signs[key]);
+  for (let i = 0; i < node.children.length; i++) freeSigns(node.children[i], handlers);
+}
+
+function createSession(sid, post) {
+  const s = {
+    sid,
+    ops: [],
+    handlers: new Map(),
+    nextSign: 1,
+    inflight: false,
+    scheduled: false,
+    closed: false,
+    seq: 0,
+    apps: [],
+    closers: [],
+    ack() {
+      s.inflight = false;
+      flush(s);
+    },
+  };
+  const touch = () => {
+    if (s.scheduled) return;
+    s.scheduled = true;
+    queueMicrotask(() => {
+      s.scheduled = false;
+      flush(s);
+    });
+  };
+  s.post = post;
+  const ops = () => s.ops;
+  const nodeOps = {
+    createElement(tag) {
+      const n = new HostNode(tag);
+      ops().push(OP.CREATE, n.id, tag);
+      touch();
+      return n;
+    },
+    createText(text) {
+      const n = new HostNode("#text");
+      ops().push(OP.CREATE_TEXT, n.id, text);
+      touch();
+      return n;
+    },
+    createComment() {
+      const n = new HostNode("#comment");
+      ops().push(OP.CREATE_TEXT, n.id, "");
+      touch();
+      return n;
+    },
+    setText(n, text) {
+      ops().push(OP.SET_TEXT, n.id, text);
+      touch();
+    },
+    setElementText(n, text) {
+      for (let i = 0; i < n.children.length; i++) freeSigns(n.children[i], s.handlers);
+      n.children = [];
+      ops().push(OP.SET_ELEMENT_TEXT, n.id, text);
+      touch();
+    },
+    insert(child, parent, anchor) {
+      if (child.parent) child.parent.children.splice(child.parent.children.indexOf(child), 1);
+      const i = anchor ? parent.children.indexOf(anchor) : parent.children.length;
+      parent.children.splice(i, 0, child);
+      child.parent = parent;
+      ops().push(OP.INSERT, parent.id, child.id, anchor ? anchor.id : 0);
+      touch();
+    },
+    remove(child) {
+      const p = child.parent;
+      if (!p) return;
+      p.children.splice(p.children.indexOf(child), 1);
+      child.parent = null;
+      freeSigns(child, s.handlers);
+      ops().push(OP.REMOVE, child.id);
+      touch();
+    },
+    parentNode: (n) => n.parent,
+    nextSibling(n) {
+      const p = n.parent;
+      return p ? (p.children[p.children.indexOf(n) + 1] ?? null) : null;
+    },
+    patchProp(el, key, prev, next) {
+      if (key.length > 2 && key.charCodeAt(0) === 111 && key.charCodeAt(1) === 110 && key.charCodeAt(2) < 91) {
+        // onXxx: the function stays here; only a stable number crosses the boundary
+        const name = key.slice(2).toLowerCase();
+        if (next) {
+          el.signs = el.signs || {};
+          let sign = el.signs[key];
+          const first = sign === undefined;
+          if (first) sign = el.signs[key] = s.nextSign++;
+          s.handlers.set(sign, next);
+          if (first) ops().push(OP.SET_EVENT, el.id, name, sign);
+        } else if (el.signs && el.signs[key] !== undefined) {
+          s.handlers.delete(el.signs[key]);
+          delete el.signs[key];
+          ops().push(OP.SET_EVENT, el.id, name, 0);
+        }
+        touch();
+        return;
+      }
+      if (prev === next) return;
+      ops().push(OP.SET_PROP, el.id, key, next);
+      touch();
+    },
+  };
+  s.renderer = createRenderer(nodeOps);
+  s.root = () => {
+    const n = new HostNode("root");
+    ops().push(OP.CREATE, n.id, "root");
+    return n;
+  };
+  return s;
+}
+
+function flush(s) {
+  if (s.inflight || s.closed || s.ops.length === 0) return;
+  const ops = s.ops;
+  s.ops = [];
+  s.inflight = true;
+  s.post({ t: "ops", sid: s.sid, seq: ++s.seq, ops });
+}
+
+globalThis.__moxiBoot = function __moxiBoot(factory) {
+  const sessions = new Map();
+  const post = (m) => self.postMessage(m);
+  self.onmessage = (event) => {
+    const m = event.data;
+    if (m.t === "open") {
+      const t0 = performance.now();
+      const s = createSession(m.sid, post);
+      sessions.set(m.sid, s);
+      const definition = factory({
+        vue: VUE,
+        sid: m.sid,
+        onClose: (fn) => s.closers.push(fn),
+      });
+      for (const name in definition.views) {
+        const app = s.renderer.createApp(definition.views[name]);
+        app.config.errorHandler = (error) => post({ t: "error", sid: m.sid, message: String(error) });
+        app.mount(s.root());
+        s.apps.push(app);
+      }
+      post({ t: "opened", sid: m.sid, ms: performance.now() - t0 });
+    } else if (m.t === "ack") {
+      const s = sessions.get(m.sid);
+      if (s) s.ack();
+    } else if (m.t === "close") {
+      const s = sessions.get(m.sid);
+      if (!s) return;
+      s.closed = true;
+      for (const fn of s.closers) fn();
+      for (const app of s.apps) app.unmount();
+      sessions.delete(m.sid);
+      post({ t: "closed", sid: m.sid });
+    }
+  };
+  __moxiBoot.stats = () => ({
+    sessions: sessions.size,
+    handlers: [...sessions.values()].map((s) => s.handlers.size),
+  });
+  post({ t: "ready", evalMs: performance.now() });
+};

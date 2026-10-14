@@ -1,0 +1,135 @@
+name: Probe PB1-PB4
+
+on:
+  pull_request:
+    paths:
+      - "probes/PB1-PB4/**"
+      - ".github/workflows/probe-PB1-PB4.yml"
+
+permissions:
+  contents: read
+
+env:
+  PROBE_OUT: ${{ github.workspace }}/probes/PB1-PB4/out
+
+jobs:
+  pb1:
+    name: PB1 worker memory and start
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install-deps chromium
+      - name: Build the runtime and check it in Node
+        working-directory: probes/PB1-PB4
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node build.mjs
+          node selftest.mjs
+      - name: Allow the Chromium user-namespace sandbox
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+      - name: Sandbox check
+        run: |
+          if PROBE_MODE=diag xvfb-run --auto-servernum pnpm exec electron probes/PB1-PB4/main.cjs; then
+            echo "PROBE_SWITCHES=" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Sandboxed Electron did not start; falling back to no-sandbox"
+            echo "PROBE_SWITCHES=no-sandbox" >> "$GITHUB_ENV"
+          fi
+      - name: PB1 cases
+        env:
+          PROBE_MODE: pb1
+        run: xvfb-run --auto-servernum pnpm exec electron probes/PB1-PB4/main.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pb1-out
+          path: probes/PB1-PB4/out
+          retention-days: 7
+
+  pb4:
+    name: PB4 data worker size ceiling
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install-deps chromium
+      - name: Build the runtime and check it in Node
+        working-directory: probes/PB1-PB4
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node build.mjs
+          node selftest.mjs
+      - name: Allow the Chromium user-namespace sandbox
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+      - name: Sandbox check
+        run: |
+          if PROBE_MODE=diag xvfb-run --auto-servernum pnpm exec electron probes/PB1-PB4/main.cjs; then
+            echo "PROBE_SWITCHES=" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Sandboxed Electron did not start; falling back to no-sandbox"
+            echo "PROBE_SWITCHES=no-sandbox" >> "$GITHUB_ENV"
+          fi
+      - name: PB4 size ceiling
+        env:
+          PROBE_MODE: pb4-size
+        run: xvfb-run --auto-servernum pnpm exec electron probes/PB1-PB4/main.cjs
+      - name: PB4 bootstrap as today (no corsEnabled)
+        if: always()
+        env:
+          PROBE_MODE: pb4-boot
+          PROBE_CORS: "off"
+        run: xvfb-run --auto-servernum pnpm exec electron probes/PB1-PB4/main.cjs
+      - name: PB4 bootstrap with corsEnabled, no Access-Control-Allow-Origin
+        if: always()
+        env:
+          PROBE_MODE: pb4-boot
+          PROBE_CORS: scheme
+        run: xvfb-run --auto-servernum pnpm exec electron probes/PB1-PB4/main.cjs
+      - name: PB4 bootstrap with corsEnabled and Access-Control-Allow-Origin from the plugin handler
+        if: always()
+        env:
+          PROBE_MODE: pb4-boot
+          PROBE_CORS: scheme+acao
+        run: xvfb-run --auto-servernum pnpm exec electron probes/PB1-PB4/main.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pb4-out
+          path: probes/PB1-PB4/out
+          retention-days: 7
+
+  launcher:
+    name: PB1 launcher idle footprint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install-deps chromium
+      - run: pnpm build
+      - name: Launcher idle
+        run: xvfb-run --auto-servernum pnpm exec playwright test -c probes/PB1-PB4/playwright.config.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: launcher-out
+          path: probes/PB1-PB4/out/launcher-idle.json
+          retention-days: 7
