@@ -12,6 +12,18 @@ env:
   PB7_SCALE: "1"
 
 jobs:
+  ps-selftest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - run: node --test probes/PB7-PB9/lib/chord.test.cjs
+      - name: Check the Windows key sender script with PowerShell 7 (compile, struct size, protocol)
+        run: PB9_PS_EXE=pwsh node probes/PB7-PB9/pb9/os-keys-selftest.cjs
+
   pb9-linux:
     if: false
     runs-on: ubuntu-latest
@@ -42,6 +54,7 @@ jobs:
           if-no-files-found: warn
 
   pb7-linux:
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 25
     strategy:
@@ -69,6 +82,7 @@ jobs:
           PB7_VARIANT: ${{ matrix.variant }}
           PB7_HIDE: ${{ matrix.hide }}
           PB7_OUT: ${{ github.workspace }}/out
+          PB_DONE_FILE: ${{ github.workspace }}/out/pb7-done-${{ matrix.tag }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -77,7 +91,7 @@ jobs:
           if-no-files-found: warn
 
   pb9-windows:
-    if: false
+    needs: ps-selftest
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
@@ -90,6 +104,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: node --test probes/PB7-PB9/lib/chord.test.cjs
       - name: PB9 (Electron on the Windows desktop)
+        continue-on-error: true
         run: node probes/PB7-PB9/pb9/drive.cjs
         env:
           PB9_OUT: ${{ github.workspace }}\out
@@ -101,7 +116,7 @@ jobs:
           if-no-files-found: warn
 
   pb7-windows:
-    if: false
+    needs: ps-selftest
     runs-on: windows-latest
     timeout-minutes: 25
     strategy:
@@ -119,6 +134,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: PB7 (Electron on the Windows desktop)
+        continue-on-error: true
         run: pnpm exec electron probes/PB7-PB9/pb7/main.cjs
         env:
           PB7_VARIANT: ${{ matrix.variant }}

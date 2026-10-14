@@ -22,7 +22,25 @@ public static class Native {
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
   [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
   [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool attach);
+  [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+  [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
+  [DllImport("user32.dll")] public static extern void SwitchToThisWindow(IntPtr h, bool altTab);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, System.Text.StringBuilder text, int max);
   [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+  public static void ClickCentre(IntPtr h) {
+    RECT r;
+    GetWindowRect(h, out r);
+    SetCursorPos((r.Left + r.Right) / 2, (r.Top + r.Bottom) / 2);
+    mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero);
+    mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
+  }
+  public static string Title(IntPtr h) {
+    System.Text.StringBuilder sb = new System.Text.StringBuilder(256);
+    GetWindowText(h, sb, 256);
+    return sb.ToString();
+  }
   public static uint Key(ushort scan, bool up, bool ext) {
     INPUT[] a = new INPUT[1];
     a[0].type = 1;
@@ -61,7 +79,21 @@ while ($true) {
         $returned = [Native]::SetForegroundWindow($h)
         [void][Native]::AttachThreadInput($cur, $fgThread, $false)
         $now = [Native]::GetForegroundWindow()
-        Reply @{ ok = $true; foreground = ($now -eq $h); setForegroundReturned = $returned; hadForeground = ($fg -ne [IntPtr]::Zero) }
+        $switched = $false
+        if ($now -ne $h) {
+          [Native]::SwitchToThisWindow($h, $true)
+          Start-Sleep -Milliseconds 300
+          $now = [Native]::GetForegroundWindow()
+          $switched = $true
+        }
+        $clicked = $false
+        if ($now -ne $h) {
+          [Native]::ClickCentre($h)
+          Start-Sleep -Milliseconds 300
+          $now = [Native]::GetForegroundWindow()
+          $clicked = $true
+        }
+        Reply @{ ok = $true; foreground = ($now -eq $h); setForegroundReturned = $returned; usedSwitchToThisWindow = $switched; usedClick = $clicked; hadForeground = ($fg -ne [IntPtr]::Zero); foregroundTitle = [Native]::Title($now) }
       }
     } elseif ($req.cmd -eq 'keys') {
       $sent = 0

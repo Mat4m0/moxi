@@ -304,7 +304,10 @@ async function main() {
   fs.writeFileSync(path.join(OUT, `pb7-${process.platform}-${TAG}.json`), JSON.stringify(result, null, 1));
   log("PB7_RESULT", result);
   clearTimeout(hard);
-  app.exit(0);
+  fs.writeFileSync(process.env.PB7_DONE_FILE || path.join(OUT, `pb7-done-${TAG}`), "done\n");
+  await new Promise((resolve) => process.stdout.write("PB7_DONE\n", resolve));
+  // app.exit() hung at teardown on two CI runs after the result was already on disk; skip it.
+  process.kill(process.pid, "SIGKILL");
 }
 
 main().catch((error) => {
