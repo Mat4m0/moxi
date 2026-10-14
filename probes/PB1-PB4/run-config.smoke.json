@@ -1,0 +1,101 @@
+{
+  "tag": "smoke",
+  "pb1": {
+    "runs": 1,
+    "warmupMs": 2000,
+    "samples": 5,
+    "cases": [
+      {
+        "P": 0,
+        "S": 0
+      },
+      {
+        "P": 1,
+        "S": 1
+      },
+      {
+        "P": 10,
+        "S": 1
+      },
+      {
+        "P": 10,
+        "S": 4
+      },
+      {
+        "P": 40,
+        "S": 1
+      },
+      {
+        "P": 40,
+        "S": 4
+      }
+    ],
+    "coldSeqP": 10,
+    "extras": [
+      {
+        "P": 10,
+        "S": 1,
+        "mix": "empty"
+      },
+      {
+        "P": 10,
+        "S": 1,
+        "mix": "runtime"
+      },
+      {
+        "P": 10,
+        "S": 4,
+        "mix": "runtime"
+      },
+      {
+        "P": 10,
+        "S": 1,
+        "mix": "elements"
+      },
+      {
+        "P": 10,
+        "S": 4,
+        "mix": "elements"
+      }
+    ],
+    "extraSamples": 3,
+    "extraWarmupMs": 1000
+  },
+  "pb4": {
+    "sizesMiB": [
+      0.5,
+      1,
+      1.5,
+      2,
+      3,
+      4,
+      8
+    ],
+    "forms": [
+      "base64",
+      "percent"
+    ],
+    "reps": 3,
+    "memorySamples": 3,
+    "memorySettleMs": 1000,
+    "resolutionKiB": 64,
+    "timeoutMs": 20000,
+    "exactBase64Bytes": [
+      1572840,
+      1572843,
+      1572846
+    ]
+  },
+  "pb4boot": {
+    "sizesMiB": [
+      0.0625,
+      1,
+      16
+    ],
+    "timeoutMs": 20000
+  },
+  "launcher": {
+    "warmupMs": 3000,
+    "samples": 5
+  }
+}

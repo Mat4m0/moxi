@@ -1,0 +1,119 @@
+{
+  "tag": "growth",
+  "jobs": [
+    "pb1"
+  ],
+  "pb1": {
+    "runs": 2,
+    "warmupMs": 30000,
+    "samples": 180,
+    "cases": [
+      {
+        "P": 0,
+        "S": 0
+      },
+      {
+        "P": 10,
+        "S": 1
+      },
+      {
+        "P": 10,
+        "S": 4
+      }
+    ],
+    "coldSeqP": 0,
+    "extras": [
+      {
+        "P": 10,
+        "S": 1,
+        "mix": "a"
+      },
+      {
+        "P": 10,
+        "S": 4,
+        "mix": "a"
+      },
+      {
+        "P": 10,
+        "S": 1,
+        "mix": "b"
+      },
+      {
+        "P": 10,
+        "S": 4,
+        "mix": "b"
+      },
+      {
+        "P": 10,
+        "S": 1,
+        "mix": "c"
+      },
+      {
+        "P": 10,
+        "S": 4,
+        "mix": "c"
+      }
+    ],
+    "extraSamples": 60,
+    "extraWarmupMs": 15000
+  },
+  "pb4": {
+    "sizesMiB": [],
+    "forms": [],
+    "reps": 1,
+    "memorySamples": 1,
+    "memorySettleMs": 0,
+    "resolutionKiB": 16,
+    "timeoutMs": 20000
+  },
+  "pb4boot": {
+    "sizesMiB": [],
+    "timeoutMs": 20000
+  },
+  "launcher": {
+    "warmupMs": 10000,
+    "samples": 60
+  },
+  "pb1Mode": "pb1-long",
+  "long": {
+    "warmupMs": 10000,
+    "heapEverySeconds": 10,
+    "gcSettleMs": 3000,
+    "afterGcSamples": 10,
+    "cases": [
+      {
+        "P": 0,
+        "S": 0,
+        "observeSeconds": 60,
+        "regrowSeconds": 30
+      },
+      {
+        "P": 10,
+        "S": 1,
+        "observeSeconds": 480,
+        "regrowSeconds": 150
+      },
+      {
+        "P": 10,
+        "S": 1,
+        "mix": "b",
+        "observeSeconds": 300,
+        "regrowSeconds": 60
+      },
+      {
+        "P": 10,
+        "S": 1,
+        "mix": "c",
+        "observeSeconds": 300,
+        "regrowSeconds": 60
+      },
+      {
+        "P": 10,
+        "S": 1,
+        "mix": "a",
+        "observeSeconds": 180,
+        "regrowSeconds": 30
+      }
+    ]
+  }
+}

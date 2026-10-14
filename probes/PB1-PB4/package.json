@@ -1,0 +1,11 @@
+{
+  "name": "probe-pb1-pb4",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Architecture probe PB1 and PB4. Never merged.",
+  "dependencies": {
+    "@vue/runtime-core": "3.5.44",
+    "esbuild": "0.28.2"
+  },
+  "type": "module"
+}
