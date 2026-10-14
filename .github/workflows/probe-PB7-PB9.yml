@@ -1,0 +1,154 @@
+name: probe-PB7-PB9
+
+# Measurements are done (CI runs 38639331804, 38640183652, 38640655449, 38643059724). Every job is off so a push
+# cannot spend runner minutes; remove the `if: false` lines to measure again.
+
+on:
+  pull_request:
+    paths: ["probes/PB7-PB9/**", ".github/workflows/probe-PB7-PB9.yml"]
+
+permissions:
+  contents: read
+
+env:
+  # 1 = the full 5.75 minute timeline; smaller values shorten every phase (smoke runs).
+  PB7_SCALE: "1"
+
+jobs:
+  ps-selftest:
+    if: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - run: node --test probes/PB7-PB9/lib/chord.test.cjs
+      - name: Check the Windows key sender script with PowerShell 7 (compile, struct size, protocol)
+        run: PB9_PS_EXE=pwsh node probes/PB7-PB9/pb9/os-keys-selftest.cjs
+
+  pb9-linux:
+    if: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install-deps chromium
+      - run: sudo apt-get install -y openbox xdotool x11-xkb-utils
+      - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - run: node --test probes/PB7-PB9/lib/chord.test.cjs
+      - name: Check the Windows key sender script with PowerShell 7 (compile, struct size, protocol)
+        run: PB9_PS_EXE=pwsh node probes/PB7-PB9/pb9/os-keys-selftest.cjs
+      - name: PB9 (Electron under xvfb 1920x1080x24 with openbox)
+        run: xvfb-run --auto-servernum -s "-screen 0 1920x1080x24" bash probes/PB7-PB9/ci/session.sh node probes/PB7-PB9/pb9/drive.cjs
+        env:
+          PB9_OUT: ${{ github.workspace }}/out
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pb9-linux
+          path: out/
+          if-no-files-found: warn
+
+  pb7-linux:
+    if: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { variant: "false", hide: "0", tag: "false" }
+          - { variant: "default", hide: "0", tag: "default" }
+          - { variant: "false", hide: "1", tag: "false-hide" }
+          - { variant: "default", hide: "1", tag: "default-hide" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install-deps chromium
+      - run: sudo apt-get install -y openbox xdotool
+      - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: PB7 (Electron under xvfb 1920x1080x24 with openbox)
+        run: xvfb-run --auto-servernum -s "-screen 0 1920x1080x24" bash probes/PB7-PB9/ci/session.sh pnpm exec electron probes/PB7-PB9/pb7/main.cjs
+        env:
+          PB7_VARIANT: ${{ matrix.variant }}
+          PB7_HIDE: ${{ matrix.hide }}
+          PB7_OUT: ${{ github.workspace }}/out
+          PB_DONE_FILE: ${{ github.workspace }}/out/pb7-done-${{ matrix.tag }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pb7-linux-${{ matrix.tag }}
+          path: out/
+          if-no-files-found: warn
+
+  pb9-windows:
+    if: false
+    needs: ps-selftest
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node --test probes/PB7-PB9/lib/chord.test.cjs
+      - name: PB9 (Electron on the Windows desktop)
+        continue-on-error: true
+        run: node probes/PB7-PB9/pb9/drive.cjs
+        env:
+          PB9_OUT: ${{ github.workspace }}\out
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pb9-windows
+          path: out/
+          if-no-files-found: warn
+
+  pb7-windows:
+    if: false
+    needs: ps-selftest
+    runs-on: windows-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { variant: "false", hide: "0", tag: "false" }
+          - { variant: "default", hide: "0", tag: "default" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: PB7 (Electron on the Windows desktop)
+        continue-on-error: true
+        run: pnpm exec electron probes/PB7-PB9/pb7/main.cjs
+        env:
+          PB7_VARIANT: ${{ matrix.variant }}
+          PB7_HIDE: ${{ matrix.hide }}
+          PB7_OUT: ${{ github.workspace }}\out
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pb7-windows-${{ matrix.tag }}
+          path: out/
+          if-no-files-found: warn
