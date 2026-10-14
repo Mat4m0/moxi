@@ -43,6 +43,24 @@ if [ "$LINUX" = 1 ]; then
   sidecar_pid=$!
 fi
 
+kill_electron() {
+  if [ "$LINUX" = 1 ]; then
+    pkill -9 -f 'electron/dist/electron' || true
+  else
+    taskkill //F //T //IM electron.exe > /dev/null 2>&1 || true
+  fi
+  kill -9 "$1" 2>/dev/null || true
+}
+count_electron() {
+  if [ "$LINUX" = 1 ]; then pgrep -c -f 'electron/dist/electron' || true
+  else tasklist //FI "IMAGENAME eq electron.exe" //NH 2>/dev/null | grep -ci 'electron.exe' || true; fi
+}
+
+# Resolve (and on first use download) the binary once; run it directly, not through the npm wrapper.
+EXE="$(node -p "require('electron')" | tail -n 1)"
+[ "$LINUX" = 1 ] || EXE="$(cygpath -u "$EXE")"
+echo "electron: $EXE"
+
 disk_report
 i=0
 for c in $CASES; do
@@ -51,11 +69,30 @@ for c in $CASES; do
   LOG="$DIR/electron-$i-$c.log"
   start=$(date +%s)
   if [ "$LINUX" = 1 ]; then
-    xvfb-run --auto-servernum --server-args="-screen 0 1280x800x24" pnpm exec electron probes/PB2 "--pb2-case=$c" "--pb2-rep=$i" "--pb2-out=$OUT" > "$LOG" 2>&1
+    xvfb-run --auto-servernum --server-args="-screen 0 1280x800x24" "$EXE" probes/PB2 "--pb2-case=$c" "--pb2-rep=$i" "--pb2-out=$OUT" > "$LOG" 2>&1 &
   else
-    pnpm exec electron probes/PB2 "--pb2-case=$c" "--pb2-rep=$i" "--pb2-out=$OUT" > "$LOG" 2>&1
+    "$EXE" probes/PB2 "--pb2-case=$c" "--pb2-rep=$i" "--pb2-out=$OUT" > "$LOG" 2>&1 &
   fi
+  pid=$!
+  # A case ends by itself; kill it 15 s after its summary line, or at 330 s.
+  hung=0
+  seen=""
+  waited=0
+  while kill -0 "$pid" 2>/dev/null; do
+    sleep 1
+    waited=$((waited + 1))
+    if [ -z "$seen" ] && grep -q -E "\"rep\":$i,\"ts\":[0-9]+,\"t\":[0-9]+,\"kind\":\"summary\"" "$OUT"; then seen=$waited; fi
+    if { [ -n "$seen" ] && [ $((waited - seen)) -ge 15 ]; } || [ "$waited" -ge 330 ]; then
+      hung=1
+      kill_electron "$pid"
+      break
+    fi
+  done
+  wait "$pid" 2>/dev/null
   code=$?
+  sleep 2
+  left=$(count_electron)
+  [ "${left:-0}" -gt 0 ] && kill_electron "$pid"
   # Keep logs small even if Chromium floods stderr.
   if [ "$(wc -c < "$LOG")" -gt 2000000 ]; then
     head -c 1000000 "$LOG" > "$LOG.head"
@@ -65,7 +102,7 @@ for c in $CASES; do
   fi
   grep -E '"kind":"(event|fatal)"' "$LOG" | cut -c1-600 || true
   grep -v '"probe":"PB2"' "$LOG" | tail -n 15 | cut -c1-300 || true
-  line="{\"probe\":\"PB2\",\"kind\":\"exit\",\"case\":\"$c\",\"rep\":$i,\"code\":$code,\"wallS\":$(($(date +%s) - start))}"
+  line="{\"probe\":\"PB2\",\"kind\":\"exit\",\"case\":\"$c\",\"rep\":$i,\"code\":$code,\"hungAfterSummaryOrCap\":$hung,\"leftoverProcesses\":${left:-0},\"wallS\":$(($(date +%s) - start))}"
   echo "$line"
   echo "$line" >> "$OUT"
   disk_report

@@ -384,6 +384,7 @@ function finish(code) {
   };
   out(summary, true);
   setTimeout(() => app.exit(code), 200);
+  setTimeout(() => process.exit(code), 3000); // fallback; run 4 on Windows never returned after the summary
 }
 
 // ---------- case flows ----------
@@ -524,6 +525,8 @@ setTimeout(() => {
   finish(4);
 }, HARD_CAP_MS);
 
+// A handler here keeps Electron from showing a modal error dialog, which would hang a CI case.
+process.on("uncaughtException", (err) => out({ kind: "fatal", error: String((err && err.stack) || err) }, true));
 app.on("window-all-closed", () => {});
 app.whenReady()
   .then(run)
