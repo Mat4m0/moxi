@@ -1,0 +1,8 @@
+{
+  "name": "probe-net-stack",
+  "private": true,
+  "type": "module",
+  "description": "PB11: Main network stack with pinned vetted addresses for HTTPS and WSS",
+  "scripts": { "probe": "node run.mjs" },
+  "devDependencies": { "ws": "8.22.0" }
+}

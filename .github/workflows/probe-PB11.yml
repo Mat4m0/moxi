@@ -1,0 +1,51 @@
+name: probe-PB11
+
+# Architecture probe PB11 (Main network stack with pinned vetted addresses for HTTPS and WSS).
+# Lives only on the draft PR branch probe/PB11. Local TLS servers and an injected resolver; the one
+# outside request is a GET of https://example.com. No ArenaNet files, no login, nothing uploaded.
+on:
+  pull_request:
+    paths: ["probes/PB11/**", ".github/workflows/probe-PB11.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: probe-PB11-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pb11:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: probes/PB11
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.21.0 # the Node inside Electron 44.5.1
+      - name: Install ws 8.22.0 (measured candidate) and Electron 44.5.1 (Main run)
+        run: npm install --no-save --no-package-lock --no-audit --no-fund ws@8.22.0 electron@44.5.1
+      - name: Node 24.21.0 on Linux
+        env:
+          PB11_RUNNER: gha-ubuntu-24.04-node
+          PB11_OUT: ${{ github.workspace }}/probes/PB11/result-node.json
+        run: node run.mjs
+      - name: Differential fuzz, ws-lite reader against the reader in ws (2 x 20000 streams)
+        run: |
+          node test/fuzz.mjs 20000 1
+          node test/fuzz.mjs 20000 2
+      - name: Electron 44.5.1 Main, no windows
+        env:
+          PB11_RUNNER: gha-ubuntu-24.04-electron-main
+          PB11_OUT: ${{ github.workspace }}/probes/PB11/result-electron.json
+        run: xvfb-run -a npx electron --no-sandbox --disable-gpu main.cjs
+      - name: Print results
+        if: always()
+        run: |
+          for f in result-node.json result-electron.json; do
+            test -f "$f" && node -e "console.log('RESULT_JSON $f ' + JSON.stringify(require('./$f')))"
+          done
+          true
