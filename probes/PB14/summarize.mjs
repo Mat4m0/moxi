@@ -65,25 +65,33 @@ for (const file of readdirSync(dir)
     const account = new Map(Object.entries(phase.pids ?? {}).map(([name, pid]) => [pid, name]));
     const rows = inside.map((tick) => {
       const byType = {};
+      const pssByType = {};
       const byAccount = {};
+      const pssByAccount = {};
       const vmByAccount = {};
       let priv = 0;
       let pss = 0;
       let rss = 0;
+      const pssKinds = { anon: 0, file: 0, shmem: 0 };
       for (const row of tick.rows) {
         if (!Number.isFinite(row.privKiB)) continue;
         const key = row.sub ? `${row.type}:${row.sub}` : row.type;
         byType[key] = (byType[key] ?? 0) + row.privKiB;
+        pssByType[key] = (pssByType[key] ?? 0) + row.pssKiB;
         priv += row.privKiB;
         pss += row.pssKiB;
         rss += row.rssKiB;
+        pssKinds.anon += row.pssAnonKiB ?? NaN;
+        pssKinds.file += row.pssFileKiB ?? NaN;
+        pssKinds.shmem += row.pssShmemKiB ?? NaN;
         const who = account.get(row.pid);
         if (who) {
           byAccount[who] = row.privKiB;
+          pssByAccount[who] = row.pssKiB;
           vmByAccount[who] = row.vmKiB;
         }
       }
-      return { priv, pss, rss, byType, byAccount, vmByAccount, processes: tick.rows.length };
+      return { priv, pss, rss, pssKinds, byType, pssByType, byAccount, pssByAccount, vmByAccount, processes: tick.rows.length };
     });
     const keys = new Set(rows.flatMap((row) => Object.keys(row.byType)));
     const med = (pick) => median(rows.map(pick).filter((value) => Number.isFinite(value)));
@@ -95,8 +103,18 @@ for (const file of readdirSync(dir)
       pss: stats(rows.map((row) => row.pss)),
       rss: stats(rows.map((row) => row.rss)),
       medianPrivKiB: med((row) => row.priv),
+      medianPssKiB: med((row) => row.pss),
+      pssKindMedianKiB: Object.fromEntries(
+        ["anon", "file", "shmem"].map((kind) => [kind, med((row) => row.pssKinds[kind])]),
+      ),
       byTypeMedianKiB: Object.fromEntries(
         [...keys].map((key) => [key, median(rows.map((row) => row.byType[key] ?? 0))]),
+      ),
+      pssByTypeMedianKiB: Object.fromEntries(
+        [...keys].map((key) => [key, median(rows.map((row) => row.pssByType[key] ?? 0))]),
+      ),
+      pssByAccountMedianKiB: Object.fromEntries(
+        ["a", "b"].map((who) => [who, med((row) => row.pssByAccount[who])]),
       ),
       byAccountMedianKiB: Object.fromEntries(
         ["a", "b"].map((who) => [who, med((row) => row.byAccount[who])]),
@@ -114,16 +132,15 @@ for (const file of readdirSync(dir)
     state[left]?.medianPrivKiB != null && state[right]?.medianPrivKiB != null
       ? toMiB(state[right].medianPrivKiB - state[left].medianPrivKiB)
       : null;
-  const typeDelta = (left, right) => {
+  const deltaPss = (left, right) =>
+    state[left]?.medianPssKiB != null && state[right]?.medianPssKiB != null
+      ? toMiB(state[right].medianPssKiB - state[left].medianPssKiB)
+      : null;
+  const typeDelta = (left, right, field = "byTypeMedianKiB") => {
     if (!state[left] || !state[right]) return null;
     const out = {};
-    for (const key of new Set([
-      ...Object.keys(state[left].byTypeMedianKiB),
-      ...Object.keys(state[right].byTypeMedianKiB),
-    ]))
-      out[key] = toMiB(
-        (state[right].byTypeMedianKiB[key] ?? 0) - (state[left].byTypeMedianKiB[key] ?? 0),
-      );
+    for (const key of new Set([...Object.keys(state[left][field]), ...Object.keys(state[right][field])]))
+      out[key] = toMiB((state[right][field][key] ?? 0) - (state[left][field][key] ?? 0));
     return out;
   };
 
@@ -163,7 +180,20 @@ for (const file of readdirSync(dir)
       secondWindow: delta("S1", "S2"),
       reserveWasmMemory: delta("S2", "S3"),
     },
+    deltaPssMiB: {
+      firstWindowOverNone: deltaPss("S0", "S1"),
+      secondWindow: deltaPss("S1", "S2"),
+    },
+    secondWindowPssKindMiB: Object.fromEntries(
+      ["anon", "file", "shmem"].map((kind) => [
+        kind,
+        state.S1?.pssKindMedianKiB?.[kind] != null && state.S2?.pssKindMedianKiB?.[kind] != null
+          ? toMiB(state.S2.pssKindMedianKiB[kind] - state.S1.pssKindMedianKiB[kind])
+          : null,
+      ]),
+    ),
     secondWindowByTypeMiB: typeDelta("S1", "S2"),
+    secondWindowPssByTypeMiB: typeDelta("S1", "S2", "pssByTypeMedianKiB"),
     reserve: of("reserve")[0]?.reserved ?? null,
     frameRate,
     memSamplerRows: mem.length,
@@ -188,6 +218,11 @@ for (const arm of ["partitioned", "shared"]) {
     launches: mine.length,
     secondWindowDeltaMiB: col((launch) => launch.deltaMiB.secondWindow),
     secondWindowMedianMiB: median(col((launch) => launch.deltaMiB.secondWindow)),
+    secondWindowPssDeltaMiB: col((launch) => launch.deltaPssMiB.secondWindow),
+    secondWindowPssMedianMiB: median(col((launch) => launch.deltaPssMiB.secondWindow)),
+    firstWindowPssDeltaMiB: col((launch) => launch.deltaPssMiB.firstWindowOverNone),
+    s1PssP50MiB: col((launch) => (launch.memory.S1?.pss?.p50)),
+    s2PssP50MiB: col((launch) => (launch.memory.S2?.pss?.p50)),
     firstWindowDeltaMiB: col((launch) => launch.deltaMiB.firstWindowOverNone),
     s1PrivateP50MiB: col((launch) => launch.memory.S1?.private?.p50),
     s2PrivateP50MiB: col((launch) => launch.memory.S2?.private?.p50),
@@ -208,7 +243,10 @@ for (const launch of launches)
           Object.entries(launch.memory).map(([name, value]) => [name, value.samples]),
         ),
         deltaMiB: launch.deltaMiB,
+        deltaPssMiB: launch.deltaPssMiB,
         secondWindowByTypeMiB: launch.secondWindowByTypeMiB,
+        secondWindowPssByTypeMiB: launch.secondWindowPssByTypeMiB,
+        secondWindowPssKindMiB: launch.secondWindowPssKindMiB,
         privateP50MiB: Object.fromEntries(
           Object.entries(launch.memory).map(([name, value]) => [name, value.private?.p50 ?? null]),
         ),
