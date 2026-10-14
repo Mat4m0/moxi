@@ -13,8 +13,31 @@ env:
   PROBE_OUT: ${{ github.workspace }}/probes/PB1-PB4/out
 
 jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      pb1: ${{ steps.plan.outputs.pb1 }}
+      pb4: ${{ steps.plan.outputs.pb4 }}
+      launcher: ${{ steps.plan.outputs.launcher }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: plan
+        name: Jobs listed in run-config.json
+        run: |
+          for job in pb1 pb4 launcher; do
+            if jq -e --arg job "$job" '.jobs | index($job)' probes/PB1-PB4/run-config.json > /dev/null; then
+              echo "$job=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "$job=false" >> "$GITHUB_OUTPUT"
+            fi
+          done
+
   pb1:
     name: PB1 worker memory and start
+    needs: plan
+    if: needs.plan.outputs.pb1 == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -55,6 +78,8 @@ jobs:
 
   pb4:
     name: PB4 data worker size ceiling
+    needs: plan
+    if: needs.plan.outputs.pb4 == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -113,6 +138,8 @@ jobs:
 
   launcher:
     name: PB1 launcher idle footprint
+    needs: plan
+    if: needs.plan.outputs.launcher == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:

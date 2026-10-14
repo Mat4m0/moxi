@@ -1,102 +1,73 @@
 {
-  "tag": "full",
+  "tag": "steady",
+  "jobs": [
+    "pb1"
+  ],
   "pb1": {
     "runs": 2,
-    "warmupMs": 10000,
-    "samples": 60,
+    "warmupMs": 30000,
+    "samples": 180,
     "cases": [
       {
         "P": 0,
         "S": 0
       },
       {
-        "P": 1,
-        "S": 1
-      },
-      {
-        "P": 1,
-        "S": 4
-      },
-      {
         "P": 10,
         "S": 1
       },
       {
         "P": 10,
-        "S": 4
-      },
-      {
-        "P": 40,
-        "S": 1
-      },
-      {
-        "P": 40,
         "S": 4
       }
     ],
-    "coldSeqP": 10,
+    "coldSeqP": 0,
     "extras": [
       {
         "P": 10,
         "S": 1,
-        "mix": "empty"
-      },
-      {
-        "P": 10,
-        "S": 1,
-        "mix": "runtime"
+        "mix": "a"
       },
       {
         "P": 10,
         "S": 4,
-        "mix": "runtime"
+        "mix": "a"
       },
       {
         "P": 10,
         "S": 1,
-        "mix": "elements"
+        "mix": "b"
       },
       {
         "P": 10,
         "S": 4,
-        "mix": "elements"
+        "mix": "b"
+      },
+      {
+        "P": 10,
+        "S": 1,
+        "mix": "c"
+      },
+      {
+        "P": 10,
+        "S": 4,
+        "mix": "c"
       }
     ],
-    "extraSamples": 20,
-    "extraWarmupMs": 5000
+    "extraSamples": 60,
+    "extraWarmupMs": 15000
   },
   "pb4": {
-    "sizesMiB": [
-      0.5,
-      1,
-      1.5,
-      2,
-      3,
-      4,
-      8
-    ],
-    "forms": [
-      "base64",
-      "percent"
-    ],
-    "reps": 5,
-    "memorySamples": 10,
-    "memorySettleMs": 3000,
+    "sizesMiB": [],
+    "forms": [],
+    "reps": 1,
+    "memorySamples": 1,
+    "memorySettleMs": 0,
     "resolutionKiB": 16,
-    "timeoutMs": 20000,
-    "exactBase64Bytes": [
-      1572840,
-      1572843,
-      1572846
-    ]
+    "timeoutMs": 20000
   },
   "pb4boot": {
-    "sizesMiB": [
-      0.0625,
-      1,
-      4,
-      16
-    ],
+    "sizesMiB": [],
     "timeoutMs": 20000
   },
   "launcher": {

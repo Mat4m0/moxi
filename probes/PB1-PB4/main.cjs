@@ -292,6 +292,9 @@ const MIXES = {
   elements: ["a2", "a2", "a2", "a2", "a2", "b", "b", "b", "c2", "c2"],
   runtime: ["runtime"],
   empty: ["empty"],
+  a: ["a"],
+  b: ["b"],
+  c: ["c"],
 };
 const plan = (P, mix = "default") =>
   Array.from({ length: P }, (_, i) => ({ id: `p${i}`, kind: MIXES[mix][i % MIXES[mix].length] }));
