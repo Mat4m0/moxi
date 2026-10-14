@@ -41,6 +41,7 @@ test("opaque plugin workers cannot access storage, game files or network and lea
       executablePath: executable,
       args: [appPath],
       env,
+      chromiumSandbox: true,
     });
     const started = application;
     await expect
