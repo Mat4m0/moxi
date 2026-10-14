@@ -1,6 +1,6 @@
 "use strict";
 // Hidden plugin-host page: starts workers from data: URLs and acks every op batch without rendering.
-const probe = window.probe;
+const api = window.probe; // a top-level `probe` binding would clash with the exposed global
 const workers = new Map();
 const totals = { batches: 0, numbers: 0, errors: 0 };
 let bundles = null;
@@ -79,7 +79,7 @@ async function spawn({ plugins, sessions, sequential }) {
   if (sequential) for (const plugin of plugins) await one(plugin);
   else await Promise.all(plugins.map(one));
   result.totalMs = performance.now() - started;
-  probe.emit("spawned", result);
+  api.emit("spawned", result);
 }
 
 // One start attempt of a data: module worker; resolves instead of throwing.
@@ -127,7 +127,7 @@ async function sizeTest({ text, form, reps, keep, timeoutMs }) {
   } catch (error) {
     out.outcome = "url-build-failed";
     out.message = String(error.message);
-    probe.emit("size-result", out);
+    api.emit("size-result", out);
     return;
   }
   out.urlBuildMs = performance.now() - built;
@@ -145,7 +145,7 @@ async function sizeTest({ text, form, reps, keep, timeoutMs }) {
   const bad = out.attempts.find((a) => a.outcome !== "started");
   out.outcome = bad ? bad.outcome : "started";
   if (kept) workers.set("kept", { worker: kept });
-  probe.emit("size-result", out);
+  api.emit("size-result", out);
 }
 
 // Bootstrap variant: a tiny data: module that imports the code from the moxi scheme.
@@ -173,15 +173,15 @@ async function bootTest({ bootstrap, timeoutMs }) {
   });
   out.outcome = await done;
   worker.terminate();
-  probe.emit("boot-result", out);
+  api.emit("boot-result", out);
 }
 
 async function init() {
-  bundles = await probe.invoke("bundles");
-  probe.on("spawn", (cmd) => void spawn(cmd));
-  probe.on("counters", () => probe.emit("counters", { ...totals }));
-  probe.on("size-test", (cmd) => void sizeTest(cmd));
-  probe.on("boot-test", (cmd) => void bootTest(cmd));
-  probe.emit("host-ready", { href: location.href, origin: String(location.origin) });
+  bundles = await api.invoke("bundles");
+  api.on("spawn", (cmd) => void spawn(cmd));
+  api.on("counters", () => api.emit("counters", { ...totals }));
+  api.on("size-test", (cmd) => void sizeTest(cmd));
+  api.on("boot-test", (cmd) => void bootTest(cmd));
+  api.emit("host-ready", { href: location.href, origin: String(location.origin) });
 }
-init().catch((error) => probe.emit("host-error", String(error && error.stack ? error.stack : error)));
+init().catch((error) => api.emit("host-error", String(error && error.stack ? error.stack : error)));
