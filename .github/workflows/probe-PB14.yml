@@ -19,8 +19,8 @@ jobs:
     timeout-minutes: 40
     env:
       PB14_RUNNER: ubuntu-24.04 (github-hosted, 2 vCPU)
-      PB14_FAST: "1"
-      PB14_PLAN: "partitioned:a shared:b"
+      PB14_FAST: "0"
+      PB14_PLAN: "partitioned:a shared:b partitioned:b shared:a partitioned:a partitioned:b:hidden"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
