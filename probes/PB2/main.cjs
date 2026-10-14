@@ -21,6 +21,7 @@ const HOLD_MS = 30_000;
 const CPU_CAP_MS = 60_000;
 const HARD_CAP_MS = 280_000;
 
+app.enableSandbox(); // as moxi Main does
 app.commandLine.appendSwitch("disable-features", "CalculateNativeWinOcclusion");
 
 const now = () => performance.now();
