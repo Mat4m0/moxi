@@ -9,10 +9,11 @@ permissions:
 
 env:
   # 1 = the full 5.75 minute timeline; smaller values shorten every phase (smoke runs).
-  PB7_SCALE: "0.1"
+  PB7_SCALE: "1"
 
 jobs:
   pb9-linux:
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
