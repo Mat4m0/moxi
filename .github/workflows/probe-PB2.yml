@@ -1,0 +1,59 @@
+name: probe-PB2
+
+# Architecture probe PB2 (worker out-of-memory blast radius). Lives only on the draft PR branch probe/PB2.
+on:
+  pull_request:
+    paths: ["probes/PB2/**", ".github/workflows/probe-PB2.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: probe-PB2-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pb2:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - if: runner.os == 'Linux'
+        run: pnpm exec playwright install-deps chromium
+      - name: Environment
+        shell: bash
+        run: |
+          uname -a
+          if [ "$(uname -s)" = "Linux" ]; then
+            nproc; free -m; swapon --show || true
+            echo "userns restriction: $(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || echo n/a)"
+            echo "overcommit: $(cat /proc/sys/vm/overcommit_memory)"
+            ls -l node_modules/electron/dist/chrome-sandbox || true
+          else
+            systeminfo | grep -i -E "Total Physical|Virtual Memory|OS Name|OS Version" || true
+          fi
+      - name: Run PB2
+        shell: bash
+        env:
+          PB2_OUT: pb2-out/pb2-${{ matrix.os }}.jsonl
+        run: bash probes/PB2/run.sh
+      - name: Summaries (JSON lines)
+        if: always()
+        shell: bash
+        run: grep -h -E '"kind":"(summary|exit|fatal)"' pb2-out/pb2-*.jsonl || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pb2-${{ matrix.os }}
+          path: pb2-out/
+          retention-days: 14
