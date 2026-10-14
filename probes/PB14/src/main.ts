@@ -3,13 +3,11 @@
 // the product's current shape (default session, one global `client`, replaced per game window).
 // It uses moxi's real client routes, game renderer, game preload and fixture client. No product
 // file is changed and no ArenaNet byte exists here.
-import { execFile } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { appendFileSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs";
 import { cpus, release, tmpdir, totalmem } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { promisify } from "node:util";
 import { app, BrowserWindow, ipcMain, net, protocol, session } from "electron";
 import type { Session } from "electron";
 import { createClientCache } from "../../../apps/desktop/src/game-files/index.ts";
@@ -40,6 +38,7 @@ const samples = {
   S0: Number(process.env.PB14_S0 ?? (fast ? 3 : 30)),
   S1: Number(process.env.PB14_S1 ?? (fast ? 5 : 60)),
   S2: Number(process.env.PB14_S2 ?? (fast ? 5 : 60)),
+  S3: Number(process.env.PB14_S3 ?? (fast ? 3 : 10)),
 };
 const readyMs = (show ? 60 : 20) * 1000;
 
@@ -56,7 +55,6 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
-const run = promisify(execFile);
 const sleep = (ms: number) => new Promise<void>((done) => setTimeout(done, ms));
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 const csp =
@@ -65,7 +63,7 @@ const csp =
 function emit(kind: string, data: Json = {}) {
   const line = JSON.stringify({ probe: "PB14", kind, arm, launch, t: Date.now(), ...data });
   appendFileSync(out, line + "\n");
-  if (kind !== "sample") console.log(line.length > 1500 ? line.slice(0, 1500) + "..." : line);
+  if (kind !== "tick") console.log(line.length > 1500 ? line.slice(0, 1500) + "..." : line);
 }
 async function guard<T>(name: string, work: () => Promise<T>): Promise<T | { error: string }> {
   try {
@@ -281,82 +279,27 @@ function page<T = Json>(game: Game, call: string): Promise<T> {
   return game.win.webContents.executeJavaScript(`__pb14.${call}`) as Promise<T>;
 }
 
-// ---------------------------------------------------------------- memory (Linux)
+// ---------------------------------------------------------------- memory phases
+// Memory is read by an external root sampler (sampler.mjs) so that sampling creates no garbage in
+// Main. Main only marks when each state starts and which OS process renders which account.
 
-interface Smaps {
-  rss: number;
-  pss: number;
-  priv: number;
-}
-async function readSmaps(pid: number): Promise<Smaps | undefined> {
-  try {
-    // Chromium renderers are not dumpable, so only root can read their smaps_rollup.
-    const { stdout } = await run("sudo", ["-n", "cat", `/proc/${pid}/smaps_rollup`]);
-    const field = (name: string) => Number(new RegExp(`^${name}:\\s+(\\d+) kB`, "m").exec(stdout)?.[1] ?? NaN);
-    return {
-      rss: field("Rss"),
-      pss: field("Pss"),
-      priv: field("Private_Clean") + field("Private_Dirty"),
-    };
-  } catch {
-    return undefined;
-  }
+function rendererPids(): Record<string, number> {
+  const pids: Record<string, number> = {};
+  for (const game of games.values())
+    if (!game.win.isDestroyed()) pids[game.account] = game.win.webContents.getOSProcessId();
+  return pids;
 }
 
-async function memorySample(state: string, index: number) {
-  if (process.platform !== "linux") return emit("sample", { state, index, unsupported: process.platform });
-  const metrics = app.getAppMetrics();
-  const rendererOf = new Map<number, string>();
-  for (const game of games.values()) {
-    const pid = game.win.isDestroyed() ? 0 : game.win.webContents.getOSProcessId();
-    if (pid) rendererOf.set(pid, game.account);
-  }
-  const rows = await Promise.all(
-    metrics.map(async (metric) => ({ metric, smaps: await readSmaps(metric.pid) })),
-  );
-  const byType: Record<string, number> = {};
-  const byAccount: Record<string, number> = {};
-  let priv = 0;
-  let pss = 0;
-  let rss = 0;
-  let missing = 0;
-  for (const { metric, smaps } of rows) {
-    if (!smaps || Number.isNaN(smaps.priv)) {
-      missing++;
-      continue;
-    }
-    priv += smaps.priv;
-    pss += smaps.pss;
-    rss += smaps.rss;
-    byType[metric.type] = (byType[metric.type] ?? 0) + smaps.priv;
-    const account = rendererOf.get(metric.pid);
-    if (account) byAccount[account] = (byAccount[account] ?? 0) + smaps.priv;
-  }
-  const frames: Record<string, number> = {};
-  for (const game of games.values()) frames[game.account] = game.frames;
-  emit("sample", {
+async function sampleState(state: "S0" | "S1" | "S2" | "S3") {
+  emit("phase", {
     state,
-    index,
-    privKiB: priv,
-    pssKiB: pss,
-    rssKiB: rss,
-    byType,
-    byAccount,
-    frames,
-    processes: metrics.length,
-    missing,
+    warmMs,
+    samples: samples[state],
+    games: games.size,
+    pids: rendererPids(),
+    mainPid: process.pid,
   });
-}
-
-async function sampleState(state: "S0" | "S1" | "S2") {
-  emit("phase", { state, warmMs, samples: samples[state], games: games.size });
-  await sleep(warmMs);
-  const started = Date.now();
-  for (let index = 0; index < samples[state]; index++) {
-    await memorySample(state, index);
-    const wait = started + (index + 1) * 1000 - Date.now();
-    if (wait > 0) await sleep(wait);
-  }
+  await sleep(warmMs + samples[state] * 1000 + 500);
 }
 
 // ---------------------------------------------------------------- checks
@@ -497,10 +440,11 @@ async function functional(genOf: Record<Account, Generation>, ordered: Game[]) {
     cache: (read[game.account].cache as { marker?: string } | undefined)?.marker,
     cookie: read[game.account].cookie,
   });
+  // Cookies are not stored for a custom scheme at all, so they are reported, not compared.
   const ownOnly = (game: Game) => {
     const seen = markers(game);
     const own = `${game.account}:${nonces[game.account]}`;
-    return seen.idb === own && seen.localStorage === own && seen.cache === own && seen.cookie === `pb14=${game.account}`;
+    return seen.idb === own && seen.localStorage === own && seen.cache === own;
   };
   check("storage-separate", ordered.every(ownOnly), {
     nonces,
@@ -614,6 +558,12 @@ async function scenario() {
   });
   await app.whenReady();
   app.on("window-all-closed", () => {});
+  // Frames per window once a second: tiny, and the only periodic work Main does.
+  setInterval(() => {
+    const frames: Record<string, number> = {};
+    for (const game of games.values()) frames[game.account] = game.frames;
+    emit("tick", { frames });
+  }, 1000);
   cacheDir = join(work, "game");
   roots = {
     launcher: join(work, "none"),
@@ -654,7 +604,7 @@ async function scenario() {
 
   const firstGame = await createGame(firstAccount);
   const firstReady = await waitReady(firstGame);
-  emit("window", { account: firstAccount, ready: firstReady, frames: firstGame.frames });
+  emit("window", { account: firstAccount, ready: firstReady, frames: firstGame.frames, pid: firstGame.win.webContents.getOSProcessId() });
   await sampleState("S1");
 
   // A background update stages generation B while the first window runs A.
@@ -662,11 +612,17 @@ async function scenario() {
   emit("staged", { candidate: generations.B.token, state: await cache.state() });
   const secondGame = await createGame(secondAccount);
   const secondReady = await waitReady(secondGame);
-  emit("window", { account: secondAccount, ready: secondReady, frames: secondGame.frames });
+  emit("window", { account: secondAccount, ready: secondReady, frames: secondGame.frames, pid: secondGame.win.webContents.getOSProcessId() });
   await sampleState("S2");
 
   const ordered = [firstGame, secondGame];
   await guard("functional", () => functional(genOf, ordered));
+  // The client declares a 256 MiB initial, 2 GiB maximum memory: what do two windows reserve?
+  const reserved = await Promise.all(
+    ordered.map((game) => guard("reserveMemory", () => page<Json>(game, "reserveMemory()"))),
+  );
+  emit("reserve", { reserved });
+  await sampleState("S3");
   if (arm === "partitioned") await guard("reopen", () => reopen(genOf, firstGame, secondGame));
 
   emit("summary", {

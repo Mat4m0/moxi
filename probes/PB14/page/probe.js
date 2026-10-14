@@ -141,13 +141,14 @@
         return { wrote: value };
       });
       out.cache = await guard(async () => {
+        // Cache Storage accepts only http(s) request URLs; nothing is fetched by put().
         const cache = await caches.open("pb14");
-        await cache.put("moxi://app/pb14-marker", new Response(value));
+        await cache.put("https://pb14.invalid/marker", new Response(value));
         return { wrote: value };
       });
       out.cookie = await guard(async () => {
         document.cookie = "pb14=" + account + "; path=/; max-age=3600";
-        return { wrote: account };
+        return { wrote: account, stored: document.cookie };
       });
       return out;
     },
@@ -174,11 +175,21 @@
       out.cache = await guard(async () => {
         const names = await caches.keys();
         const cache = names.includes("pb14") ? await caches.open("pb14") : null;
-        const response = cache ? await cache.match("moxi://app/pb14-marker") : undefined;
+        const response = cache ? await cache.match("https://pb14.invalid/marker") : undefined;
         return { names, marker: response ? await response.text() : null };
       });
       out.cookie = await guard(async () => document.cookie);
       return out;
+    },
+
+    // The client declares a 256 MiB initial, 2 GiB maximum memory; reserve the same, untouched.
+    async reserveMemory() {
+      return guard(async () => {
+        const t0 = performance.now();
+        const memory = new WebAssembly.Memory({ initial: 4096, maximum: 32768 });
+        globalThis.__pb14Memory = memory;
+        return { bytes: memory.buffer.byteLength, ms: performance.now() - t0 };
+      });
     },
 
     // Several suspended stacks at once in this window. The caller starts both windows together.
