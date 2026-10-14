@@ -1,9 +1,9 @@
 {
-  "tag": "full",
+  "tag": "smoke",
   "pb1": {
-    "runs": 2,
-    "warmupMs": 10000,
-    "samples": 60,
+    "runs": 1,
+    "warmupMs": 2000,
+    "samples": 5,
     "cases": [
       {
         "P": 0,
@@ -12,10 +12,6 @@
       {
         "P": 1,
         "S": 1
-      },
-      {
-        "P": 1,
-        "S": 4
       },
       {
         "P": 10,
@@ -62,8 +58,8 @@
         "mix": "elements"
       }
     ],
-    "extraSamples": 20,
-    "extraWarmupMs": 5000
+    "extraSamples": 3,
+    "extraWarmupMs": 1000
   },
   "pb4": {
     "sizesMiB": [
@@ -79,10 +75,10 @@
       "base64",
       "percent"
     ],
-    "reps": 5,
-    "memorySamples": 10,
-    "memorySettleMs": 3000,
-    "resolutionKiB": 16,
+    "reps": 3,
+    "memorySamples": 3,
+    "memorySettleMs": 1000,
+    "resolutionKiB": 64,
     "timeoutMs": 20000,
     "exactBase64Bytes": [
       1572840,
@@ -94,13 +90,12 @@
     "sizesMiB": [
       0.0625,
       1,
-      4,
       16
     ],
     "timeoutMs": 20000
   },
   "launcher": {
-    "warmupMs": 10000,
-    "samples": 60
+    "warmupMs": 3000,
+    "samples": 5
   }
 }
