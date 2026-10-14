@@ -14,7 +14,7 @@ package boundaries, storage and testing.
 pnpm install            # Node and pnpm versions are pinned in the repo
 pnpm dev                # Dev app, real game, hot reload; never touches player data
 pnpm dev --fixture      # Dev app with the fake game client (no ArenaNet, no login)
-pnpm dev --background   # agents: no Dock icon, invisible windows, never takes focus
+pnpm dev --background   # agents: no Dock icon, invisible windows, never takes focus (not on Linux)
 pnpm hub                # Hub, HUD and plugins in a browser with a simulated game
 pnpm check              # exactly the pull-request gate: format, lint, types, tests
 pnpm test <path>        # one area

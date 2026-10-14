@@ -54,7 +54,10 @@ if (!app.isPackaged && process.env.MOXI_CDP_PORT) {
   writeFileSync(join(folders.data, "cdp.json"), JSON.stringify({ port }));
 }
 // Tests and agents run the app without a Dock icon, visible windows or focus changes.
-const background = !app.isPackaged && process.env.MOXI_BACKGROUND === "1";
+// Not on Linux: Electron applies opacity there, which throttles a transparent window to
+// about 1 fps, and a page screenshot after a style change never completes.
+const background =
+  !app.isPackaged && process.env.MOXI_BACKGROUND === "1" && process.platform !== "linux";
 if (background && process.platform === "darwin") app.setActivationPolicy("accessory");
 const windows = new Map<number, { kind: WindowKind; window: BrowserWindow }>();
 const network = createGameNetwork((owner, event) => {
