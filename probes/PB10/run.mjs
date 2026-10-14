@@ -67,6 +67,7 @@ function proc(pid) {
     noSandboxArg: cmdline.includes("--no-sandbox"),
     seccomp: field("Seccomp"),
     noNewPrivs: field("NoNewPrivs"),
+    nsPid: field("NSpid"),
     userNs: link("ns/user"),
     pidNs: link("ns/pid"),
     apparmor: read("attr/current").trim(),
@@ -178,6 +179,7 @@ const summary = {
     seccomp: p.seccomp,
     noSandboxArg: p.noSandboxArg,
     typeArg: p.typeArg,
+    nsPid: p.nsPid,
     ownNetNs: hook?.main ? p.netNs !== hook.main.netNs : null,
     ownUserNs: hook?.main ? p.userNs !== hook.main.userNs : null,
     ownPidNs: hook?.main ? p.pidNs !== hook.main.pidNs : null,
@@ -186,12 +188,13 @@ const summary = {
   otherProcesses: (hook?.processes ?? [])
     .filter((p) => p.type !== "Tab")
     .map((p) => `${p.type}${p.serviceName ? `/${p.serviceName}` : ""}:seccomp=${p.seccomp},nosb=${p.noSandboxArg},field=${p.sandboxedField}`),
-  externalRenderers: renderersExternal.map((p) => ({ pid: p.pid, typeArg: p.typeArg, seccomp: p.seccomp, noSandboxArg: p.noSandboxArg, apparmor: p.apparmor })),
+  externalRenderers: renderersExternal.map((p) => ({ pid: p.pid, typeArg: p.typeArg, seccomp: p.seccomp, nsPid: p.nsPid, noSandboxArg: p.noSandboxArg, apparmor: p.apparmor })),
   externalOthers: (external ?? []).filter((p) => !renderersExternal.includes(p)).map((p) => `${p.typeArg ?? p.comm}:seccomp=${p.seccomp},nosb=${p.noSandboxArg}`),
   externalAgrees:
     hook && external
-      ? renderersMain.every((m) => renderersExternal.some((e) => e.pid === m.pid && e.seccomp === m.seccomp)) &&
-        renderersMain.length === renderersExternal.length
+      ? renderersMain.every((m) =>
+          renderersExternal.some((e) => e.pid === m.pid && e.seccomp === m.seccomp && e.nsPid === m.nsPid),
+        )
       : null,
   mainApparmor: mainExternal?.apparmor ?? hook?.main?.apparmor ?? null,
   gameLoaded: hook?.gameLoaded ?? null,
@@ -200,6 +203,7 @@ const summary = {
   cdpError: hook?.cdpError ?? null,
   refusalRule: hook?.refusalRule ?? null,
   namespaceRule: hook?.namespaceRule ?? null,
+  statusRule: hook?.statusRule ?? null,
   readiness: hook?.readiness ?? null,
   chromeSandboxPage: typeof hook?.chromeSandboxPage === "string" ? hook.chromeSandboxPage.replace(/\s+/g, " ").slice(0, 600) : null,
   sandboxLogLines: sandboxLines,

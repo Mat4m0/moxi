@@ -39,6 +39,8 @@ function proc(pid: number) {
     seccomp: field("Seccomp"),
     seccompFilters: field("Seccomp_filters"),
     noNewPrivs: field("NoNewPrivs"),
+    // More than one value: the process lives in a nested PID namespace (layer-1 sandbox).
+    nsPid: field("NSpid"),
     noSandboxArg: cmdline.includes("--no-sandbox"),
     typeArg: cmdline.find((arg) => arg.startsWith("--type=")) ?? null,
     userNs: link("ns/user"),
@@ -132,30 +134,22 @@ export function pb10Probe(options: Options) {
       };
       // Candidate rule: layer 1 (namespace or SUID sandbox) gives the host its own PID namespace.
       const mainProc = proc(process.pid);
+      const own = (host: string | undefined, main: string) =>
+        host === undefined ? null : host.startsWith("ERR") ? host : host !== main;
       result.namespaceRule = {
-        hostOwnPidNs: hostProc ? hostProc.pidNs !== mainProc.pidNs : null,
-        hostOwnNetNs: hostProc ? hostProc.netNs !== mainProc.netNs : null,
-        hostOwnUserNs: hostProc ? hostProc.userNs !== mainProc.userNs : null,
-        wouldRefuseNonOfficial:
-          result.argvNoSandbox === true ||
-          hostProc?.seccomp !== "2" ||
-          !hostProc ||
-          hostProc.pidNs === mainProc.pidNs,
+        hostOwnPidNs: own(hostProc?.pidNs, mainProc.pidNs),
+        hostOwnNetNs: own(hostProc?.netNs, mainProc.netNs),
+        hostOwnUserNs: own(hostProc?.userNs, mainProc.userNs),
+        wouldRefuseNonOfficial: own(hostProc?.pidNs, mainProc.pidNs) !== true,
       };
-      // chrome://sandbox, when Electron serves it, is Chromium's own verdict.
-      try {
-        const win = new options.BrowserWindow({ show: false, webPreferences: { sandbox: true } });
-        await Promise.race([win.loadURL("chrome://sandbox"), sleep(8_000)]);
-        await sleep(1_000);
-        const text: unknown = await Promise.race([
-          win.webContents.executeJavaScript("document.body ? document.body.innerText : ''"),
-          sleep(5_000).then(() => "TIMEOUT"),
-        ]);
-        result.chromeSandboxPage = typeof text === "string" ? text.slice(0, 1500) : String(text);
-        win.destroy();
-      } catch (error) {
-        result.chromeSandboxPage = `ERR ${String(error).slice(0, 200)}`;
-      }
+      // Candidate rule from one file: /proc/<pid>/status has Seccomp 2 and a nested NSpid.
+      const nested = (hostProc?.nsPid ?? "").trim().split(/\s+/).length > 1;
+      result.statusRule = {
+        hostSeccomp: hostProc?.seccomp ?? null,
+        hostNSpid: hostProc?.nsPid ?? null,
+        mainNSpid: mainProc.nsPid,
+        wouldRefuseNonOfficial: result.argvNoSandbox === true || hostProc?.seccomp !== "2" || !nested,
+      };
     } catch (error) {
       result.error = String(error);
     }
