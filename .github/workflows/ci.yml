@@ -17,6 +17,8 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The Hub suite runs in Vitest browser mode on Playwright's Chromium.
+      - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm check
   e2e:
     runs-on: ubuntu-latest
