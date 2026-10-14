@@ -7,49 +7,50 @@ function plugin(__moxi) {
     const primary = PROFS[i % 10];
     const secondary = PROFS[(i * 7 + 3) % 10];
     const skills = [];
-    for (let k = 0; k < 8; k++) skills.push("skill-" + ((i * 31 + k * 17) % 1400));
+    for (let k = 0; k < 8; k++) skills.push((i * 31 + k * 17) % 1400);
     builds.push({
       id: "build-" + i,
       name: primary + "/" + secondary + " " + ROLES[i % 5] + " #" + i,
-      profession: primary + "/" + secondary,
+      profession: i % 10,
+      subtitle: primary + "/" + secondary,
       template: "OQ" + i + "AbCdEfGhIjKlMnOpQrStUvWx",
-      preview: primary + "/" + secondary + ": " + skills.join(", "),
+      skills,
+      attributes: "Strength " + (8 + (i % 5)) + ", Tactics " + (6 + (i % 7)) + ", Swordsmanship " + (9 + (i % 4)),
     });
   }
   const query = ref("");
   const selected = ref("");
-  const filtered = computed(() => builds.filter((b) => b.name.indexOf(query.value) >= 0));
-  const Row = defineComponent({
-    props: ["build"],
-    setup(props) {
-      return () =>
-        h(
-          "ItemData",
-          {
-            id: props.build.id,
-            title: props.build.name,
-            subtitle: props.build.profession,
-            onSelect: () => {
-              selected.value = props.build.id;
-            },
-          },
-          [h("Preview", { kind: "build" }, props.build.preview)],
-        );
-    },
-  });
+  const rows = computed(() =>
+    builds
+      .filter((b) => b.name.indexOf(query.value) >= 0)
+      .map((b) => ({
+        id: b.id,
+        title: b.name,
+        subtitle: b.subtitle,
+        icon: { profession: b.profession },
+        keywords: [b.subtitle, b.template],
+        accessories: [{ text: String(b.skills.length) + " skills" }],
+        preview: [
+          { type: "text", text: b.subtitle + " " + b.template },
+          { type: "skillbar", skills: b.skills },
+          { type: "keyvalue", pairs: [["Attributes", b.attributes], ["Template", b.template]] },
+        ],
+        actions: [
+          { title: "Apply build", run: () => { selected.value = b.id; } },
+          { title: "Copy template", copy: b.template },
+        ],
+      })),
+  );
   const View = defineComponent({
     setup() {
       return () =>
-        h(
-          "List",
-          {
-            searchable: true,
-            onSearch: (text) => {
-              query.value = text;
-            },
+        h("List", {
+          searchable: true,
+          items: rows.value,
+          onSearch: (text) => {
+            query.value = text;
           },
-          filtered.value.map((b) => h(Row, { key: b.id, build: b })),
-        );
+        });
     },
   });
   return { views: { main: View } };

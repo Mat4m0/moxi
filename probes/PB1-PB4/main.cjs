@@ -41,11 +41,9 @@ app.on("window-all-closed", () => {});
 const dist = path.join(__dirname, "dist");
 const bundles = {
   runtime: fs.readFileSync(path.join(dist, "runtime-api1.js"), "utf8"),
-  plugins: {
-    a: fs.readFileSync(path.join(dist, "plugin-a.js"), "utf8"),
-    b: fs.readFileSync(path.join(dist, "plugin-b.js"), "utf8"),
-    c: fs.readFileSync(path.join(dist, "plugin-c.js"), "utf8"),
-  },
+  plugins: Object.fromEntries(
+    ["a", "b", "c", "a2", "c2"].map((kind) => [kind, fs.readFileSync(path.join(dist, `plugin-${kind}.js`), "utf8")]),
+  ),
 };
 // Plugin-host CSP of the v2 design: today's value without 'wasm-unsafe-eval'.
 const CSP =
@@ -288,14 +286,22 @@ const seriesSummary = (s) => ({
 
 // ---------------------------------------------------------------- PB1
 
-const MIX = ["a", "a", "a", "a", "a", "b", "b", "b", "c", "c"]; // 50 % / 30 % / 20 %
-const plan = (P) => Array.from({ length: P }, (_, i) => ({ id: `p${i}`, kind: MIX[i % MIX.length] }));
+// Gated mix: 50 % Builds-class (a), 30 % HUD-only (b), 20 % Trade-class (c). The other mixes are diagnostics.
+const MIXES = {
+  default: ["a", "a", "a", "a", "a", "b", "b", "b", "c", "c"],
+  elements: ["a2", "a2", "a2", "a2", "a2", "b", "b", "b", "c2", "c2"],
+  runtime: ["runtime"],
+  empty: ["empty"],
+};
+const plan = (P, mix = "default") =>
+  Array.from({ length: P }, (_, i) => ({ id: `p${i}`, kind: MIXES[mix][i % MIXES[mix].length] }));
 const stat = (values) => summarize(values);
 
 async function pb1Case(spec, run, cfg) {
-  const { P, S, sequential = false } = spec;
-  const name = sequential ? `cold-sequential P=${P}` : `P=${P},S=${S}`;
-  const rec = { run, name, P, S, sequential };
+  const { P, S, sequential = false, mix = "default" } = spec;
+  const base = sequential ? `cold-sequential P=${P}` : `P=${P},S=${S}`;
+  const name = mix === "default" ? base : `${base} [${mix}]`;
+  const rec = { run, name, P, S, sequential, mix };
   const samples = spec.samples ?? cfg.samples;
   const warmupMs = spec.warmupMs ?? cfg.warmupMs;
   let host;
@@ -304,7 +310,7 @@ async function pb1Case(spec, run, cfg) {
     rec.pid = host.pid;
     rec.status = processStatus(host.pid);
     if (P > 0) {
-      host.send("spawn", { plugins: plan(P), sessions: S, sequential });
+      host.send("spawn", { plugins: plan(P, mix), sessions: S, sequential });
       const spawned = await host.waitEvent("spawned", 240000);
       rec.spawn = {
         readyMs: stat(spawned.ready),
@@ -349,6 +355,11 @@ async function runPB1() {
     for (const spec of order) cases.push(await pb1Case(spec, run, cfg));
     if (run === 0 && cfg.coldSeqP) {
       cases.push(await pb1Case({ P: cfg.coldSeqP, S: 1, sequential: true, samples: 3, warmupMs: 1000 }, run, cfg));
+    }
+    if (run === 0) {
+      for (const extra of cfg.extras || []) {
+        cases.push(await pb1Case({ ...extra, samples: cfg.extraSamples, warmupMs: cfg.extraWarmupMs }, run, cfg));
+      }
     }
   }
   const result = { probe: "PB1", env: collectEnv(), config: cfg, cases };
@@ -440,15 +451,22 @@ async function runPB4Size() {
     }
     bisect[form] = { largestPassBytes: lastPass, smallestFailBytes: firstFail, steps };
   }
+  // base64 raw sizes that are multiples of 3 give exact URL lengths around the 2 MiB (2,097,152) URL cap.
+  const exact = [];
+  for (const bytes of cfg.exactBase64Bytes || []) {
+    const r = await sizeAttempt("base64", bytes, { ...cfg, reps: 1 }, { memory: false });
+    exact.push({ rawBytes: bytes, urlLength: r.urlLength, outcome: r.outcome, message: r.attempts && r.attempts[0] && r.attempts[0].message });
+  }
   const baselineEnd = await baselineMemory(cfg);
-  const result = { probe: "PB4", part: "size", env: collectEnv(), config: cfg, baselineStart, baselineEnd, grid, bisect };
+  const result = { probe: "PB4", part: "size", env: collectEnv(), config: cfg, baselineStart, baselineEnd, grid, bisect, exact };
   writeOut("pb4-size-raw.json", result);
   emit({ pb4SizeDone: true, bisect });
 }
 
 // ---------------------------------------------------------------- PB4 bootstrap
 
-function bootstrapSource(url) {
+function bootstrapSource(url, pluginSource) {
+  const boot = pluginSource ? `__moxiBoot((${pluginSource}));` : "";
   return `const t0 = performance.now();
 const idb = () => new Promise((resolve) => {
   try {
@@ -464,6 +482,7 @@ const info = () => ({ origin: String(self.origin), protocol: location.protocol, 
   const pre = { ...info(), idb: await idb() };
   try {
     await import(${JSON.stringify(url)});
+    ${boot}
     self.postMessage({ t: "boot", ok: true, ms: performance.now() - t0, pre, post: { ...info(), idb: await idb() } });
   } catch (e) {
     self.postMessage({ t: "boot", ok: false, ms: performance.now() - t0, pre, name: e.name, message: String(e.message).slice(0, 300) });
@@ -474,7 +493,7 @@ const info = () => ({ origin: String(self.origin), protocol: location.protocol, 
 
 // Chrome DevTools Protocol on the host page and its workers: network failures carry the CORS reason.
 async function attachCdp(host) {
-  const log = { targets: [], failures: [], requests: new Map(), console: [], errors: [] };
+  const log = { targets: [], failures: [], responses: [], requests: new Map(), console: [], errors: [] };
   const dbg = host.win.webContents.debugger;
   try {
     dbg.attach("1.3");
@@ -493,6 +512,16 @@ async function attachCdp(host) {
           }
         } else if (method === "Network.requestWillBeSent") {
           log.requests.set(sessionId + ":" + params.requestId, params.request.url);
+        } else if (method === "Network.responseReceived") {
+          const r = params.response;
+          if (String(r.url).includes("/plugin-host/code/")) {
+            const keep = {};
+            for (const key in r.headers) {
+              const lower = key.toLowerCase();
+              if (["access-control-allow-origin", "content-type", "content-security-policy", "vary"].includes(lower)) keep[lower] = String(r.headers[key]).slice(0, 200);
+            }
+            log.responses.push({ url: r.url, status: r.status, headers: keep });
+          }
         } else if (method === "Network.loadingFailed") {
           log.failures.push({
             url: log.requests.get(sessionId + ":" + params.requestId) || null,
@@ -528,16 +557,22 @@ function classifyBoot(rec) {
   return "failed-after-handler(unclassified)";
 }
 
-async function bootCase(mib, cfg) {
-  const bytes = Math.max(Math.round(mib * 1048576), bundles.runtime.length + 2048);
-  const id = `code-${Math.round(bytes / 1024)}k`;
-  codeStore.set(id, buildModuleText(bundles.runtime, bytes));
+// kind "size": a module of the given size is imported. kind "runtime": the real runtime is imported and a
+// fixture plugin from the data: bootstrap runs one session end to end.
+async function bootCase(mib, cfg, kind = "size") {
+  const bytes = kind === "runtime" ? bundles.runtime.length : Math.max(Math.round(mib * 1048576), bundles.runtime.length + 2048);
+  const id = kind === "runtime" ? "runtime-api1" : `code-${Math.round(bytes / 1024)}k`;
+  codeStore.set(id, kind === "runtime" ? bundles.runtime : buildModuleText(bundles.runtime, bytes));
   hits.length = 0;
-  const rec = { cors: CORS, rawBytes: bytes, sizeMiB: bytes / 1048576, id };
+  const rec = { cors: CORS, kind, rawBytes: bytes, sizeMiB: bytes / 1048576, id };
   let host;
   try {
     host = await openHost("boot", { cdp: true });
-    host.send("boot-test", { bootstrap: bootstrapSource(`moxi://app/plugin-host/code/${id}.js`), timeoutMs: cfg.timeoutMs });
+    host.send("boot-test", {
+      bootstrap: bootstrapSource(`moxi://app/plugin-host/code/${id}.js`, kind === "runtime" ? bundles.plugins.a : undefined),
+      timeoutMs: cfg.timeoutMs,
+      open: kind === "runtime",
+    });
     Object.assign(rec, await host.waitEvent("boot-result", cfg.timeoutMs + 10000));
     await sleep(300);
   } catch (error) {
@@ -545,13 +580,13 @@ async function bootCase(mib, cfg) {
   } finally {
     rec.hits = hits.splice(0);
     if (host) {
-      rec.cdp = host.cdp && { targets: host.cdp.targets, failures: host.cdp.failures, console: host.cdp.console.slice(0, 8), errors: host.cdp.errors.slice(0, 5) };
+      rec.cdp = host.cdp && { targets: host.cdp.targets, failures: host.cdp.failures, responses: host.cdp.responses, console: host.cdp.console.slice(0, 8), errors: host.cdp.errors.slice(0, 5) };
       await closeHost(host);
     }
   }
   rec.classified = classifyBoot(rec);
   codeStore.delete(id);
-  emit({ pb4Boot: { cors: CORS, sizeMiB: rec.sizeMiB, classified: rec.classified, boot: rec.boot, hits: rec.hits.length } });
+  emit({ pb4Boot: { cors: CORS, kind, sizeMiB: rec.sizeMiB, classified: rec.classified, boot: rec.boot, session: rec.session, hits: rec.hits.length } });
   return rec;
 }
 
@@ -559,6 +594,7 @@ async function runPB4Boot() {
   const cfg = CONFIG.pb4boot;
   const cases = [];
   for (const mib of cfg.sizesMiB) cases.push(await bootCase(mib, cfg));
+  cases.push(await bootCase(0, cfg, "runtime"));
   writeOut(`pb4-boot-${CORS}.json`, { probe: "PB4", part: "bootstrap", env: collectEnv(), config: cfg, cases });
   emit({ pb4BootDone: true, cors: CORS });
 }

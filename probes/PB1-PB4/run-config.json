@@ -30,7 +30,36 @@
         "S": 4
       }
     ],
-    "coldSeqP": 10
+    "coldSeqP": 10,
+    "extras": [
+      {
+        "P": 10,
+        "S": 1,
+        "mix": "empty"
+      },
+      {
+        "P": 10,
+        "S": 1,
+        "mix": "runtime"
+      },
+      {
+        "P": 10,
+        "S": 4,
+        "mix": "runtime"
+      },
+      {
+        "P": 10,
+        "S": 1,
+        "mix": "elements"
+      },
+      {
+        "P": 10,
+        "S": 4,
+        "mix": "elements"
+      }
+    ],
+    "extraSamples": 3,
+    "extraWarmupMs": 1000
   },
   "pb4": {
     "sizesMiB": [
@@ -50,7 +79,12 @@
     "memorySamples": 3,
     "memorySettleMs": 1000,
     "resolutionKiB": 64,
-    "timeoutMs": 20000
+    "timeoutMs": 20000,
+    "exactBase64Bytes": [
+      1572840,
+      1572843,
+      1572846
+    ]
   },
   "pb4boot": {
     "sizesMiB": [

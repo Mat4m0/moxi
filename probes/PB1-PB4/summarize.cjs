@@ -15,7 +15,8 @@ const r2 = (v) => (typeof v === "number" ? Math.round(v * 100) / 100 : v);
 function pb1() {
   const raw = read("pb1-raw.json");
   if (!raw) return null;
-  const cases = raw.cases.filter((c) => !c.sequential && !c.error);
+  const cases = raw.cases.filter((c) => !c.sequential && !c.error && (c.mix === "default" || c.mix === undefined));
+  const base0 = () => cases.filter((c) => c.name === "P=0,S=0");
   const names = [...new Set(cases.map((c) => c.name))];
   const table = {};
   for (const name of names) {
@@ -69,7 +70,7 @@ function pb1() {
   };
   // Pool per-case summaries is lossy, so report each case's own p50/p95 of ready time.
   const spawnTable = raw.cases
-    .filter((c) => c.spawn && !c.error)
+    .filter((c) => c.spawn && !c.error && (c.mix === "default" || c.mix === undefined) && !c.sequential)
     .map((c) => ({
       name: c.name,
       run: c.run,
@@ -84,6 +85,22 @@ function pb1() {
       totalMs: r2(c.spawn.totalMs),
       failures: c.spawn.failures,
     }));
+  // Diagnostics (single run each, shorter sampling): what the cost is made of.
+  const extras = raw.cases
+    .filter((c) => !c.error && c.mix && c.mix !== "default")
+    .map((c) => ({
+      name: c.name,
+      mix: c.mix,
+      P: c.P,
+      S: c.S,
+      sequential: c.sequential,
+      hostP50: r2(c.summary.privateMiB.p50),
+      minusP0: r2(c.summary.privateMiB.p50 - derived.b_P0_hostMiB),
+      perWorker: r2((c.summary.privateMiB.p50 - derived.b_P0_hostMiB) / c.P),
+      readyP50: c.spawn && r2(c.spawn.readyMs.p50),
+      openExtraP50: c.spawn && c.spawn.openExtraMs.n ? r2(c.spawn.openExtraMs.p50) : null,
+    }));
+  const coldSequential = raw.cases.filter((c) => c.sequential && c.spawn).map((c) => ({ name: c.name, readyMs: c.spawn.readyMs, evalMs: c.spawn.evalMs }));
   const w = derived.w_MiB;
   const s = derived.s_MiB;
   const total = derived.host_P10_S4_minus_P0_MiB;
@@ -105,6 +122,8 @@ function pb1() {
     table,
     derived,
     spawnTable,
+    extras,
+    coldSequential,
     errors: raw.cases.filter((c) => c.error).map((c) => ({ name: c.name, run: c.run, error: c.error })),
     decision,
     launcher: launcher && {
@@ -119,7 +138,8 @@ function pb4() {
   const size = read("pb4-size-raw.json");
   const boots = ["off", "scheme", "scheme+acao"].map((c) => read(`pb4-boot-${c}.json`)).filter(Boolean);
   if (!size && boots.length === 0) return null;
-  const out = { sizeTable: [], bisect: size && size.bisect, boot: boots.map((b) => ({ cors: b.cases[0] && b.cases[0].cors, cases: b.cases.map((c) => ({ sizeMiB: r2(c.sizeMiB), classified: c.classified, readyMs: c.boot && r2(c.boot.ms), pre: c.boot && c.boot.pre, post: c.boot && c.boot.post, hits: c.hits.length, hit0: c.hits[0], cdpFailures: c.cdp && c.cdp.failures, console: c.cdp && c.cdp.console, cdpErrors: c.cdp && c.cdp.errors, workerError: c.workerError, boot: c.boot })) })) };
+  const out = { sizeTable: [], bisect: size && size.bisect, boot: boots.map((b) => ({ cors: b.cases[0] && b.cases[0].cors, cases: b.cases.map((c) => ({ sizeMiB: r2(c.sizeMiB), classified: c.classified, readyMs: c.boot && r2(c.boot.ms), pre: c.boot && c.boot.pre, post: c.boot && c.boot.post, hits: c.hits.length, hit0: c.hits[0], cdpFailures: c.cdp && c.cdp.failures, console: c.cdp && c.cdp.console, cdpErrors: c.cdp && c.cdp.errors, responses: c.cdp && c.cdp.responses, workerError: c.workerError, session: c.session, kind: c.kind, boot: c.boot })) })) };
+  if (size) out.exact = size.exact;
   if (size) {
     const base = mean([size.baselineStart.privateMiB.p50, size.baselineEnd.privateMiB.p50]);
     out.baselinePrivateMiB = r2(base);

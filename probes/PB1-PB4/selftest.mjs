@@ -76,6 +76,15 @@ function apply(nodes, ops) {
       case 6: nodes.get(ops[i + 1]).props["@" + ops[i + 2]] = ops[i + 3]; i += 4; break;
       case 7: nodes.get(ops[i + 1]).text = ops[i + 2]; i += 3; break;
       case 8: nodes.get(ops[i + 1]).text = ops[i + 2]; nodes.get(ops[i + 1]).children = []; i += 3; break;
+      case 9: {
+        const n = nodes.get(ops[i + 1]);
+        n.rows = n.rows || new Map();
+        for (const row of ops[i + 2]) n.rows.set(row.id, row);
+        for (const id of ops[i + 3]) n.rows.delete(id);
+        if (ops[i + 4]) n.rows = new Map(ops[i + 4].map((id) => [id, n.rows.get(id)]));
+        n.itemOps = (n.itemOps || 0) + 1;
+        i += 5; break;
+      }
       default: throw new Error(`unknown op ${ops[i]} at ${i}`);
     }
   }
@@ -84,15 +93,17 @@ const countType = (nodes, type) => [...nodes.values()].filter((n) => n.type === 
 const numbers = (batches) => batches.reduce((a, b) => a + b.ops.length, 0);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// (a) Builds-class
+// (a) Builds-class: collections are data, one ITEMS patch
 {
   const s = startWorker(readFileSync(join(here, "dist/plugin-a.js"), "utf8"));
   await s.until(() => s.ready);
   s.worker.postMessage({ t: "open", sid: "a1" });
   await s.until(() => s.opened.length === 1);
   await sleep(100);
-  check("a: 200 ItemData rows", countType(s.nodes, "ItemData") === 200, `got ${countType(s.nodes, "ItemData")}`);
-  check("a: 200 previews", countType(s.nodes, "Preview") === 200);
+  const list = [...s.nodes.values()].find((n) => n.type === "List");
+  check("a: one List, no row elements", !!list && countType(s.nodes, "ItemData") === 0 && s.nodes.size <= 3, `nodes=${s.nodes.size}`);
+  check("a: 200 rows in one ITEMS patch", list.rows.size === 200 && list.itemOps === 1, `rows=${list.rows.size} itemOps=${list.itemOps}`);
+  check("a: previews present", list.rows.get("build-3").preview.length === 3);
   check("a: one batch, no errors", s.batches.length === 1 && s.errors.length === 0, `${s.batches.length} batches, numbers=${numbers(s.batches)}`);
   s.worker.postMessage({ t: "open", sid: "a2" });
   await s.until(() => s.opened.length === 2);
@@ -100,7 +111,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   check("a: second session has own batch", s.batches.some((b) => b.sid === "a2"));
   s.worker.postMessage({ t: "__stats" });
   await s.until(() => s.stats);
-  check("a: handlers = 200 per session (list search handler counted)", s.stats.handlers.every((n) => n >= 200), JSON.stringify(s.stats));
+  check("a: 200 run handlers + 1 search per session", s.stats.handlers.every((n) => n === 201), JSON.stringify(s.stats));
   await s.worker.terminate();
 }
 // (b) HUD
@@ -121,19 +132,58 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   check("b: timer cleared on close", s.batches.length === after);
   await s.worker.terminate();
 }
-// (c) Trade
+// (c) Trade-class: a one-row change is 1 ITEMS patch with 1 upsert (DESIGN 0.4, P12)
 {
   const s = startWorker(readFileSync(join(here, "dist/plugin-c.js"), "utf8"));
   await s.until(() => s.ready);
   s.worker.postMessage({ t: "open", sid: "c1" });
   await s.until(() => s.opened.length === 1);
   await sleep(100);
-  check("c: 500 TradeRow", countType(s.nodes, "TradeRow") === 500);
+  const list = [...s.nodes.values()].find((n) => n.type === "List");
+  check("c: 500 rows", list.rows.size === 500);
   const first = s.batches.length;
   await sleep(2100);
   const updates = s.batches.slice(first);
   check("c: about 2 updates per second", updates.length >= 3 && updates.length <= 6, `got ${updates.length}`);
-  check("c: update is tiny", updates.every((b) => b.ops.length <= 8), `max ${Math.max(...updates.map((b) => b.ops.length))}`);
+  check("c: each update is 1 ITEMS patch with 1 upsert", updates.every((b) => b.ops.length === 5 && b.ops[0] === 9 && b.ops[2].length === 1 && b.ops[3].length === 0 && b.ops[4] === null), JSON.stringify(updates[0] && updates[0].ops).slice(0, 160));
+  await s.worker.terminate();
+}
+// Diagnostic variants (component per row) still mount.
+{
+  for (const [file, type, count] of [["plugin-a2.js", "ItemData", 200], ["plugin-c2.js", "TradeRow", 500]]) {
+    const s = startWorker(readFileSync(join(here, "dist", file), "utf8"));
+    await s.until(() => s.ready);
+    s.worker.postMessage({ t: "open", sid: "v" });
+    await s.until(() => s.opened.length === 1);
+    await sleep(100);
+    check(`${file}: ${count} ${type} elements`, countType(s.nodes, type) === count);
+    await s.worker.terminate();
+  }
+}
+// Items: removes free signs, reorder is sent only when needed.
+{
+  const rows = `function plugin(m){const{h,ref,defineComponent}=m.vue;const step=ref(0);setTimeout(()=>{step.value=1},50);setTimeout(()=>{step.value=2},120);
+  const mk=(id)=>({id,title:id,actions:[{title:"Run",run:()=>id}]});
+  const V=defineComponent({setup(){return()=>h("List",{items:(step.value===0?["a","b","c"]:step.value===1?["a"]:["c","a","b"]).map(mk)})}});return{views:{main:V}}}`;
+  const s = startWorker(rows);
+  await s.until(() => s.ready);
+  s.worker.postMessage({ t: "open", sid: "r1" });
+  await s.until(() => s.opened.length === 1);
+  await sleep(20);
+  s.worker.postMessage({ t: "__stats" });
+  await s.until(() => s.stats);
+  check("items: 3 handlers at 3 rows", s.stats.handlers[0] === 3, JSON.stringify(s.stats));
+  s.stats = null;
+  await sleep(60);
+  s.worker.postMessage({ t: "__stats" });
+  await s.until(() => s.stats);
+  const removal = s.batches.find((b) => b.ops[0] === 9 && b.ops[3].length === 2);
+  check("items: removal is one patch with 2 removes, no upserts, no order", !!removal && removal.ops[2].length === 0 && removal.ops[4] === null);
+  check("items: signs freed for removed rows", s.stats.handlers[0] === 1, JSON.stringify(s.stats));
+  s.stats = null;
+  await sleep(100);
+  const back = s.batches[s.batches.length - 1];
+  check("items: re-adding in another order sends the order", back.ops[0] === 9 && back.ops[4] && back.ops[4].join() === "c,a,b", JSON.stringify(back.ops).slice(0, 200));
   await s.worker.terminate();
 }
 // Handler signs are freed when rows go away (no leak on remove).

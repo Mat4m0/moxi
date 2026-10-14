@@ -22,6 +22,7 @@ const OP = {
   SET_EVENT: 6,
   SET_TEXT: 7,
   SET_ELEMENT_TEXT: 8,
+  ITEMS: 9,
 };
 const VUE = { h, ref, shallowRef, computed, watchEffect, defineComponent, nextTick, Fragment, triggerRef };
 let nextId = 1;
@@ -38,7 +39,68 @@ class HostNode {
 
 function freeSigns(node, handlers) {
   if (node.signs) for (const key in node.signs) handlers.delete(node.signs[key]);
+  if (node.rows) for (const row of node.rows.values()) for (const sign of row.signs) handlers.delete(sign);
   for (let i = 0; i < node.children.length; i++) freeSigns(node.children[i], handlers);
+}
+
+// Collections are data: a keyed diff by id turns `items` into one ITEMS patch (5.2).
+// Functions inside a row (actions' run) stay here; the wire carries { $fn: sign }.
+function toWire(value, signs, state, s) {
+  if (typeof value === "function") {
+    const k = state.k++;
+    let sign = signs[k];
+    if (sign === undefined) sign = signs[k] = s.nextSign++;
+    s.handlers.set(sign, value);
+    return { $fn: sign };
+  }
+  if (Array.isArray(value)) return value.map((v) => toWire(v, signs, state, s));
+  if (value && typeof value === "object") {
+    const out = {};
+    for (const key in value) {
+      const v = value[key];
+      if (v !== undefined) out[key] = toWire(v, signs, state, s);
+    }
+    return out;
+  }
+  return value;
+}
+
+function patchItems(el, next, s) {
+  const rows = el.rows || (el.rows = new Map());
+  const previousOrder = el.order || [];
+  const ids = [];
+  const upserts = [];
+  const seen = new Set();
+  for (const row of next || []) {
+    ids.push(row.id);
+    seen.add(row.id);
+    const current = rows.get(row.id) || { json: "", signs: [] };
+    const state = { k: 0 };
+    const wire = toWire(row, current.signs, state, s);
+    for (let i = state.k; i < current.signs.length; i++) s.handlers.delete(current.signs[i]);
+    current.signs.length = state.k;
+    const json = JSON.stringify(wire);
+    if (json !== current.json) {
+      current.json = json;
+      upserts.push(wire);
+    }
+    rows.set(row.id, current);
+  }
+  const removes = [];
+  for (const [id, row] of rows) {
+    if (seen.has(id)) continue;
+    for (const sign of row.signs) s.handlers.delete(sign);
+    rows.delete(id);
+    removes.push(id);
+  }
+  // Order is sent only when it is not "survivors in old order, then new rows".
+  const expected = previousOrder.filter((id) => seen.has(id));
+  const known = new Set(previousOrder);
+  for (const id of ids) if (!known.has(id)) expected.push(id);
+  let reorder = expected.length !== ids.length;
+  for (let i = 0; !reorder && i < ids.length; i++) reorder = expected[i] !== ids[i];
+  el.order = ids;
+  return upserts.length || removes.length || reorder ? [OP.ITEMS, el.id, upserts, removes, reorder ? ids : null] : null;
 }
 
 function createSession(sid, post) {
@@ -120,6 +182,14 @@ function createSession(sid, post) {
       return p ? (p.children[p.children.indexOf(n) + 1] ?? null) : null;
     },
     patchProp(el, key, prev, next) {
+      if (key === "items") {
+        const patch = patchItems(el, next, s);
+        if (patch) {
+          ops().push(...patch);
+          touch();
+        }
+        return;
+      }
       if (key.length > 2 && key.charCodeAt(0) === 111 && key.charCodeAt(1) === 110 && key.charCodeAt(2) < 91) {
         // onXxx: the function stays here; only a stable number crosses the boundary
         const name = key.slice(2).toLowerCase();

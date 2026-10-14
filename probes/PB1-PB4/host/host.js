@@ -33,8 +33,17 @@ function track(record, message) {
   }
 }
 
+const EMPTY_WORKER =
+  "self.postMessage({t:'ready',evalMs:performance.now()});self.onmessage=(e)=>{if(e.data.t==='open')self.postMessage({t:'opened',sid:e.data.sid,ms:0})};";
+// Kinds a, b, c are the fixture plugins; "runtime" and "empty" are diagnostic floors.
+function workerText(kind) {
+  if (kind === "empty") return EMPTY_WORKER;
+  if (kind === "runtime") return bundles.runtime + "\n__moxiBoot((function(){return{views:{}}}));";
+  return bundles.runtime + "\n__moxiBoot((" + bundles.plugins[kind] + "));";
+}
+
 function startPlugin(plugin) {
-  const text = bundles.runtime + "\n__moxiBoot((" + bundles.plugins[plugin.kind] + "));";
+  const text = workerText(plugin.kind);
   const url = dataUrl(text, "base64");
   const record = { id: plugin.id, opening: new Map(), t0: performance.now() };
   const ready = new Promise((resolve, reject) => {
@@ -102,7 +111,7 @@ function tryWorker(url, timeoutMs) {
       worker.terminate();
       resolve({ outcome, message: String(message).slice(0, 300) });
     };
-    worker.onerror = (event) => fail("worker-error", event.message);
+    worker.onerror = (event) => fail("worker-error", [event.message, event.filename, event.lineno].join("|"));
     worker.onmessageerror = () => fail("messageerror", "");
     worker.onmessage = (event) => {
       const m = event.data;
@@ -148,30 +157,48 @@ async function sizeTest({ text, form, reps, keep, timeoutMs }) {
   api.emit("size-result", out);
 }
 
-// Bootstrap variant: a tiny data: module that imports the code from the moxi scheme.
-async function bootTest({ bootstrap, timeoutMs }) {
+// Bootstrap variant: a tiny data: module that imports code from the moxi scheme.
+// With `open`, the imported runtime then boots a plugin and one session runs end to end.
+async function bootTest({ bootstrap, timeoutMs, open }) {
   const url = dataUrl(bootstrap, "base64");
   const out = { messages: [] };
   const worker = new Worker(url, { type: "module", name: "bootstrap" });
-  const done = new Promise((resolve) => {
-    const timer = setTimeout(() => resolve("timeout"), timeoutMs);
+  const finish = (resolve, label) => {
+    out.outcome = label;
+    resolve();
+  };
+  await new Promise((resolve) => {
+    const timer = setTimeout(() => finish(resolve, "timeout"), timeoutMs);
     worker.onerror = (event) => {
       out.workerError = String(event.message).slice(0, 300);
       clearTimeout(timer);
-      resolve("worker-error");
+      finish(resolve, "worker-error");
     };
     worker.onmessage = (event) => {
       const m = event.data;
       if (m.t === "boot") {
         out.boot = m;
+        if (m.ok && open) {
+          out.session = {};
+          out.sessionStart = performance.now();
+          worker.postMessage({ t: "open", sid: "b" });
+        } else {
+          clearTimeout(timer);
+          finish(resolve, "boot");
+        }
+      } else if (m.t === "opened") {
+        out.session.opened = true;
+      } else if (m.t === "ops") {
+        out.session.ops = true;
+        out.session.firstOpsMs = performance.now() - out.sessionStart;
+        worker.postMessage({ t: "ack", sid: m.sid, seq: m.seq });
         clearTimeout(timer);
-        resolve("boot");
+        finish(resolve, "boot");
       } else if (m.t === "ready") {
         out.messages.push("ready");
       }
     };
   });
-  out.outcome = await done;
   worker.terminate();
   api.emit("boot-result", out);
 }

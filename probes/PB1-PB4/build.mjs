@@ -32,11 +32,13 @@ for (const [kind, file] of [
   ["a", "a-builds.js"],
   ["b", "b-hud.js"],
   ["c", "c-trade.js"],
+  ["a2", "a2-builds-elements.js"],
+  ["c2", "c2-trade-elements.js"],
 ]) {
   const source = readFileSync(join(here, "src/plugins", file), "utf8");
   const minified = transformSync(source, { minify: true, charset: "ascii" }).code.trim().replace(/;$/, "");
   writeFileSync(join(dist, `plugin-${kind}.js`), minified);
-  sizes[`plugin${kind.toUpperCase()}Bytes`] = Buffer.byteLength(minified);
+  sizes[`plugin_${kind}_Bytes`] = Buffer.byteLength(minified);
 }
 writeFileSync(join(dist, "sizes.json"), JSON.stringify(sizes));
 console.log(JSON.stringify(sizes));
