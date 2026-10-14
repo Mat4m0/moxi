@@ -6,5 +6,6 @@
   "dependencies": {
     "@vue/runtime-core": "3.5.44",
     "esbuild": "0.28.2"
-  }
+  },
+  "type": "module"
 }

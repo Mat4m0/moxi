@@ -106,6 +106,7 @@ let caseCounter = 0;
 
 function handler(request) {
   const url = new URL(request.url);
+  if (!url.pathname.startsWith("/plugin-host/code/")) console.log("HANDLER " + request.method + " " + url.pathname);
   const headers = (extra) => ({ "content-security-policy": CSP, ...extra });
   if (url.pathname === "/plugin-host/" || url.pathname === "/plugin-host/host.js") {
     const file = url.pathname.endsWith("host.js") ? "host.js" : "index.html";
@@ -217,13 +218,33 @@ async function openHost(label, { cdp = false } = {}) {
     },
   };
   hosts.set(host.id, host);
-  win.webContents.on("render-process-gone", (_event, details) => {
+  const wc = win.webContents;
+  const note = (what) => console.log(`HOSTLOG ${label} ${what}`);
+  wc.on("render-process-gone", (_event, details) => {
+    note("render-process-gone " + JSON.stringify(details));
     host.gone = details;
     for (const check of [...host.waiters]) check();
   });
+  wc.on("console-message", (...args) => {
+    const e = args[0] && typeof args[0] === "object" && "message" in args[0] ? args[0] : { level: args[1], message: args[2], sourceId: args[4], lineNumber: args[3] };
+    note(`console ${e.level} ${String(e.message).slice(0, 300)} (${e.sourceId}:${e.lineNumber})`);
+  });
+  wc.on("preload-error", (_event, preloadPath, error) => note(`preload-error ${preloadPath} ${error && error.stack}`));
+  wc.on("did-fail-load", (_event, code, description, url) => note(`did-fail-load ${code} ${description} ${url}`));
+  wc.on("dom-ready", () => note("dom-ready"));
+  wc.on("did-finish-load", () => note("did-finish-load"));
   if (cdp) host.cdp = await attachCdp(host);
   await win.loadURL("moxi://app/plugin-host/");
-  await host.waitEvent("host-ready", 60000);
+  try {
+    await host.waitEvent("host-ready", 8000);
+  } catch (error) {
+    if (!error.timeout) throw error;
+    const snapshot = await wc.executeJavaScript(
+      "JSON.stringify({probe: typeof window.probe, ready: document.readyState, href: location.href, title: document.title, html: document.documentElement.outerHTML.slice(0, 300)})",
+    );
+    note("no host-ready after 8 s; page state " + snapshot);
+    await host.waitEvent("host-ready", 12000);
+  }
   host.pid = win.webContents.getOSProcessId();
   return host;
 }
