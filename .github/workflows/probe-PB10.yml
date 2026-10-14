@@ -1,0 +1,59 @@
+name: probe-PB10
+
+on:
+  pull_request:
+    paths: ["probes/PB10/**", ".github/workflows/probe-PB10.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  linux-packages:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install-deps chromium
+      - name: FUSE for both AppImage runtimes
+        run: sudo apt-get install -y libfuse2t64 fuse3
+      - name: Block the ArenaNet patch host (the fixture client is the only game)
+        run: |
+          echo "127.0.0.1 patching.1.arenanetworks.com" | sudo tee -a /etc/hosts
+          echo "::1 patching.1.arenanetworks.com" | sudo tee -a /etc/hosts
+      - name: Splice the PB10 hook into Main (probe branch, CI only)
+        run: node probes/PB10/apply.mjs
+      - run: pnpm build
+      - name: Package .deb and legacy-runtime AppImage
+        run: pnpm exec electron-builder --config probes/PB10/electron-builder.probe.ts --publish never
+        env:
+          PB10_TOOLSET: "0.0.0"
+          PB10_TARGETS: deb,AppImage
+          PB10_OUT: out/legacy
+      - name: Package static-runtime AppImage
+        run: pnpm exec electron-builder --config probes/PB10/electron-builder.probe.ts --publish never
+        env:
+          PB10_TOOLSET: "1.0.3"
+          PB10_TARGETS: AppImage
+          PB10_OUT: out/static
+      - name: Run PB10 cases under xvfb
+        run: xvfb-run --auto-servernum bash probes/PB10/cases.sh
+        env:
+          PB10_RESULTS: ${{ github.workspace }}/pb10-out
+      - name: Print PB10 JSON lines
+        if: always()
+        run: |
+          for f in pb10-out/*.json; do
+            node -e 'const j = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); console.log("PB10 " + JSON.stringify(j.summary ?? j))' "$f"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pb10-linux
+          path: pb10-out/
+          if-no-files-found: warn
