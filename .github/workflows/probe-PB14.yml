@@ -20,7 +20,7 @@ jobs:
     env:
       PB14_RUNNER: ubuntu-24.04 (github-hosted, 2 vCPU)
       PB14_FAST: "1"
-      PB14_PLAN: "partitioned:a shared:b partitioned:a:hidden"
+      PB14_PLAN: "partitioned:a shared:b"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

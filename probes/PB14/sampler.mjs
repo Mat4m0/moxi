@@ -1,7 +1,7 @@
 // Root-side memory sampler for PB14 (Linux). Chromium renderers are not dumpable, so only root can
 // read their smaps_rollup. Run as: sudo -n node sampler.mjs <out.jsonl>. Stops on SIGTERM.
 // Metric: Private_Clean + Private_Dirty per process (Pss and Rss alongside), 1 Hz, with VmSize.
-import { appendFileSync, readdirSync, readFileSync } from "node:fs";
+import { appendFileSync, readdirSync, readFileSync, readlinkSync } from "node:fs";
 
 const out = process.argv[2];
 if (!out) throw new Error("usage: sampler.mjs <out.jsonl>");
@@ -15,8 +15,9 @@ function electronProcesses() {
     const pid = Number(entry);
     if (pid === self) continue;
     try {
+      // Chromium starts its children as /proc/self/exe, so identify the binary by the exe link.
+      if (!readlinkSync(`/proc/${pid}/exe`).endsWith("/electron/dist/electron")) continue;
       const argv = readFileSync(`/proc/${pid}/cmdline`, "utf8").split("\0");
-      if (!argv[0]?.endsWith("/electron/dist/electron")) continue;
       const type = /^--type=(.+)$/.exec(argv.find((arg) => arg.startsWith("--type=")) ?? "")?.[1] ?? "browser";
       const sub = /^--utility-sub-type=(.+)$/.exec(argv.find((arg) => arg.startsWith("--utility-sub-type=")) ?? "")?.[1];
       found.push({ pid, type, sub: sub ? sub.split(".").pop() : undefined });
