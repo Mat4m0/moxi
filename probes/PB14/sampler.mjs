@@ -17,9 +17,10 @@ function electronProcesses() {
     try {
       // Chromium starts its children as /proc/self/exe, so identify the binary by the exe link.
       if (!readlinkSync(`/proc/${pid}/exe`).endsWith("/electron/dist/electron")) continue;
-      const argv = readFileSync(`/proc/${pid}/cmdline`, "utf8").split("\0");
-      const type = /^--type=(.+)$/.exec(argv.find((arg) => arg.startsWith("--type=")) ?? "")?.[1] ?? "browser";
-      const sub = /^--utility-sub-type=(.+)$/.exec(argv.find((arg) => arg.startsWith("--utility-sub-type=")) ?? "")?.[1];
+      // Chromium rewrites the title of forked children, so match on the whole command line.
+      const cmdline = readFileSync(`/proc/${pid}/cmdline`, "utf8").replaceAll("\0", " ");
+      const type = /--type=(\S+)/.exec(cmdline)?.[1] ?? "browser";
+      const sub = /--utility-sub-type=(\S+)/.exec(cmdline)?.[1];
       found.push({ pid, type, sub: sub ? sub.split(".").pop() : undefined });
     } catch {
       // The process ended while scanning.

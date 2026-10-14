@@ -10,7 +10,9 @@ for item in $PLAN; do
   i=$((i + 1))
   IFS=: read -r arm first mode <<<"$item"
   show=1
-  [ "${mode:-}" = "hidden" ] && show=0
+  fast="${PB14_FAST:-0}"
+  # A hidden launch only observes behaviour; it needs no long memory sampling.
+  if [ "${mode:-}" = "hidden" ]; then show=0; fast=1; fi
   tag="$i-$arm-$first${mode:+-$mode}"
   echo "=== PB14 launch $tag ==="
   start=$(date +%s)
@@ -20,7 +22,7 @@ for item in $PLAN; do
     sudo -n "$(command -v node)" probes/PB14/sampler.mjs "$OUT_DIR/mem-$tag.jsonl" &
     sampler=$!
   fi
-  PB14_ARM="$arm" PB14_FIRST="$first" PB14_SHOW="$show" PB14_LAUNCH="$i" \
+  PB14_ARM="$arm" PB14_FIRST="$first" PB14_SHOW="$show" PB14_FAST="$fast" PB14_LAUNCH="$i" \
     PB14_OUT="$OUT_DIR/launch-$tag.jsonl" PB14_WORK="$(mktemp -d)" \
     timeout 900 xvfb-run --auto-servernum --server-args="-screen 0 1280x800x24" \
     pnpm exec electron probes/PB14 >"$OUT_DIR/electron-$tag.log" 2>&1

@@ -421,6 +421,18 @@ async function functional(genOf: Record<Account, Generation>, ordered: Game[]) {
       }),
       routes,
     );
+    // The default session (the launcher's) must not serve any game route.
+    const fromDefault = await guard("default-session", async () => {
+      const status = async (path: string) =>
+        (await session.defaultSession.fetch(`moxi://app${path}`)).status;
+      return {
+        launcher: await status("/launcher/"),
+        wasm: await status("/client/Gw.jspi.wasm"),
+        game: await status("/game/"),
+      };
+    });
+    const d = fromDefault as { launcher?: number; wasm?: number; game?: number };
+    check("default-session-has-no-game-routes", d.launcher === 200 && d.wasm === 404 && d.game === 404, fromDefault);
   } else {
     emit("info", { id: "shared-arm-routes", note: "one handler on the default session", routes });
   }
