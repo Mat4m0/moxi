@@ -48,6 +48,7 @@ jobs:
       - name: Print PB10 JSON lines
         if: always()
         run: |
+          shopt -s nullglob
           for f in pb10-out/*.json; do
             node -e 'const j = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); console.log("PB10 " + JSON.stringify(j.summary ?? j))' "$f"
           done

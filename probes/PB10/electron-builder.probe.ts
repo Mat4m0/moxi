@@ -14,6 +14,8 @@ const config: Configuration = {
   linux: {
     ...base.linux,
     target: targets.map((target) => ({ target, arch: ["x64"] })),
+    // The default deb name comes from "@moxi/desktop" and points into a missing "@moxi/" folder.
+    artifactName: "moxi_${version}_${arch}.${ext}",
     // FpmTarget needs a maintainer; the probe package is never published.
     maintainer: "Moxi probe <noreply@example.invalid>",
     synopsis: "Moxi architecture probe PB10",
