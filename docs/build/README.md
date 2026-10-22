@@ -22,6 +22,45 @@ order it is built and how each piece is proven.
 A brief marked **O** is built by Opus itself (UI, copy, looks, final security calls).
 **S (+O taste)** means a Sonnet worker builds and Opus does a taste pass before review ends.
 
+## Setup
+
+```text
+~/gw/moxi            this repo; the lead session runs here
+~/gw/moxi.wt/<id>    one git worktree per slice
+~/gw/gwonmac         v1, read only, checked out at tag v2026.10.0-beta.1 (the parity baseline)
+~/gw/GWCA            optional: game memory layouts (github.com/gwdevhub/GWCA), read only
+```
+
+Start every session with the references attached, so agents can check v1 behavior:
+
+```bash
+claude --add-dir ../gwonmac --add-dir ../GWCA
+```
+
+Claude Code 2.1.224 or later (sessions message each other with `SendMessage`). The roles live
+in `.claude/agents/`: `builder` builds one slice, `reviewer` reviews one with fresh eyes.
+
+## Sessions
+
+| Session | Runs where | Does |
+| --- | --- | --- |
+| Lead (one, Opus) | `moxi` | Writes briefs, starts builders and reviewers, reads their reports, reviews the diff, pushes, opens draft PRs |
+| Builder (one per slice) | `moxi.wt/<id>` | One brief, builds and commits, sends its report to the lead |
+| Reviewer (one per finished slice) | `moxi.wt/<id>` | Brief + diff + specs + v1; verdict to the lead; never edits |
+
+Start a builder as its own background session, so it has its own chat and can be resumed:
+
+```bash
+git worktree add ../moxi.wt/M1-03 -b slice/M1-03 main
+cd ../moxi.wt/M1-03 && claude --bg -n M1-03 --agent builder --add-dir ../../gwonmac \
+  "Build docs/build/slices/M1-03.md"
+claude agents              # list sessions; claude attach M1-03 to look in
+```
+
+Short lookups ("where does v1 do X?") are subagents of the lead, not sessions. Start a new
+lead session for each milestone and continue from the milestone's goal and the merged PRs;
+a long lead chat gets slow and expensive.
+
 ## How one slice runs
 
 1. **Pick.** Opus takes the first slice in [milestones.md](milestones.md) whose dependencies
