@@ -10,6 +10,7 @@ Read: the brief `docs/build/slices/<ID>.md`, the diff `git diff main...slice/<ID
 sections the brief names, `AGENTS.md`, and the v1 files the brief lists (`../gwonmac`, read only).
 
 Check:
+
 1. The outcome in the brief works; every "Done when" line holds. Rerun the key check yourself.
 2. The diff matches the specs (names, types, constants, texts). A mismatch is a finding even
    when the code looks reasonable.
@@ -23,6 +24,7 @@ Check:
 Never edit files, commit or push.
 
 Report (final message), and send it to the lead session with `SendMessage` if one is reachable:
+
 - verdict: merge | fix first | redo
 - findings, most severe first: file:line, what is wrong, the concrete failure, the fix
 - checks you reran and their real results
