@@ -15,7 +15,7 @@ automation; quality of life is welcome.** Plugin panels stay inside the game win
 1. `AGENTS.md`: rules that never bend, live-session limits, Ask Matthias first.
 2. `docs/spec/01-foundations.md`, then the other specs as a slice needs them. The specs are
    the design of record (about 8,500 lines, 16 files).
-3. `docs/build/README.md`: how one slice runs (roles, worktrees, checks, review, merge).
+3. `docs/build/README.md`: setup (v1 next to the repo), sessions, and how one slice runs.
 4. `BOOK-PLAN.md` (here): milestones M0-M15 with about 122 slices, the book decisions
    BD1-BD30, the brief template and the new proofs P80-P84.
 5. `docs/build/parity.md`: every v1 feature and what happens to it.
