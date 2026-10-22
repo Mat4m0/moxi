@@ -3,6 +3,9 @@
 This folder is temporary. It holds the inputs for the parts of the build book that do not
 exist yet. Delete it in the pull request that adds the last of them.
 
+New here? Read [ONBOARDING.md](ONBOARDING.md) first: the goal, why v2 exists, what is
+done, and prompts for your first read-only sessions with Claude.
+
 ## What moxi v2 is
 
 Electron hosts ArenaNet's official WebAssembly client. Plugins are Vue SFCs that run in
