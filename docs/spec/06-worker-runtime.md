@@ -461,7 +461,7 @@ M1-00 moves the old SDK files under `packages/sdk/src/legacy/` (so `src/runtime.
 | `packages/sdk/src/index.ts:5-7, 51-54`: `definePlugin` stores `globalThis.__moxiPluginSetup`; `package.json`: `@vue/reactivity` 3.5.43 only | `__moxi` argument, deleted in M6-03; adds `@vue/runtime-core` 3.5.43, exact |
 
 Port closely, with tests (`docs/build/README.md`): the PB6 prototype
-`rewrite-research/probes/04-session-factory/src/{ops-renderer.mjs,runtime.mjs}` and the PB4
+`probes/PB6/src/{ops-renderer.mjs,runtime.mjs}` on branch `probe/PB6` and the PB4
 bootstrap and handler in `probes/PB1-PB4/main.cjs` on branch `probe/PB1-PB4` (tag
 `archive/probe-PB1-PB4` after M0-07).
 

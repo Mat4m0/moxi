@@ -123,7 +123,7 @@ same rules with `hosts` = the request's own host only.
 
 ### 4.2 Addresses
 
-Port the probe code (`rewrite-research/probes/05-net-stack/src/net-core.mjs`) closely, with tests:
+Port the probe code (`probes/PB11/src/net-core.mjs` on branch `probe/PB11`) closely, with tests:
 
 - Resolve once per request or connect attempt with `dns.promises.lookup(host, { all: true, verbatim: true })`, raced
   against the deadline; redirect hops reuse the answers.
