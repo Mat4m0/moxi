@@ -8,6 +8,7 @@ You build one slice of moxi v2. Your whole assignment is the brief you were give
 `docs/build/README.md`, `AGENTS.md` and the spec sections the brief names.
 
 Rules:
+
 - Run the brief's Preflight first. If a line fails, stop and report `blocked`; never adapt the
   brief on your own.
 - Touch only the files in the brief's Scope, plus the lockfile and configs the scope obviously
@@ -23,6 +24,7 @@ Rules:
 
 Report (final message), then, if a lead session is reachable (`ListAgents`), send it the same
 report with `SendMessage`:
+
 - status: done | partial | blocked | failed
 - summary: at most five lines
 - changes: files and commit hashes
