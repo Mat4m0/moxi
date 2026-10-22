@@ -1,0 +1,392 @@
+[
+  {
+    "id": "C1",
+    "title": "Module-level state, useFact and the HUD root are per session (sessions 1 to 4)",
+    "kind": "isolation",
+    "pass": true,
+    "failures": [],
+    "crashed": null,
+    "notes": {},
+    "ms": 102
+  },
+  {
+    "id": "C1x",
+    "title": "Control: one shared module scope (the rejected variant) leaks counter and fact between sessions",
+    "kind": "control",
+    "pass": true,
+    "failures": [],
+    "crashed": null,
+    "notes": {
+      "session4View": [
+        "target=T1",
+        "count=1 raw=1",
+        "globals="
+      ]
+    },
+    "ms": 74
+  },
+  {
+    "id": "C2",
+    "title": "A fact update re-renders only its own session (render counters, batches)",
+    "kind": "isolation",
+    "pass": true,
+    "failures": [],
+    "crashed": null,
+    "notes": {},
+    "ms": 67
+  },
+  {
+    "id": "C3",
+    "title": "Two sessions change in one scheduler flush: one batch per (session, root), no foreign ops",
+    "kind": "isolation",
+    "pass": true,
+    "failures": [],
+    "crashed": null,
+    "notes": {},
+    "ms": 65
+  },
+  {
+    "id": "C3x",
+    "title": "Control: a single global op buffer (R7 renderer) mixes sessions in that flush",
+    "kind": "control",
+    "pass": true,
+    "failures": [],
+    "crashed": null,
+    "notes": {
+      "treeErrors": 2,
+      "viewsWrong": true
+    },
+    "ms": 52
+  },
+  {
+    "id": "C4",
+    "title": "Render throw at mount in session 2: 1, 3 and 4 render and keep updating; 2 heals",
+    "kind": "isolation",
+    "pass": true,
+    "failures": [],
+    "crashed": null,
+    "notes": {},
+    "ms": 73
+  },
+  {
+    "id": "C4b",
+    "title": "Render throw on update in session 2, same flush as 1, 3, 4: they update; 2 goes blank",
+    "kind": "finding",
+    "pass": true,
+    "failures": [],
+    "crashed": null,
+    "notes": {
+      "session2TreeAfterThrow": [],
+      "lastGoodTreeKept": false
+    },
+    "ms": 58
+  },
+  {
+    "id": "C4g",
+    "title": "Remedy for C4b: hold the root's ops on a render error, send a snapshot on recovery (last good tree stays)",
+    "kind": "finding",
+    "pass": true,
+    "failures": [],
+    "crashed": null,
+    "notes": {},
+    "ms": 67
+  },
+  {
+    "id": "C4c",
+    "title": "Throw in a handler (sync and async) in session 2 is attributed to 2; others and 2 keep working",
+    "kind": "isolation",
+    "pass": true,
+    "failures": [],
+    "crashed": null,
+    "notes": {},
+    "ms": 49
+  },
+  {
+    "id": "C4d",
+    "title": "Throw in module evaluation in session 2: only session 2 fails to open; the id is reusable",
+    "kind": "isolation",
+    "pass": true,
+    "failures": [],
+    "crashed": null,
+    "notes": {},
+    "ms": 63
+  },
+  {
+    "id": "C4e",
+    "title": "Uncaught throw from a timer in session 2 (outside Vue): cannot be attributed",
+    "kind": "finding",
+    "pass": true,
+    "failures": [],
+    "crashed": null,
+    "notes": {
+      "uncaughtAsChromiumWouldReport": [
+        "uncaught: boom in timer"
+      ],
+      "nodeDefaultWorkerState": "error"
+    },
+    "ms": 334
+  },
+  {
+    "id": "C4f",
+    "title": "Throw in a module-level watcher of session 2 (no component instance), prod and dev builds",
+    "kind": "finding",
+    "pass": true,
+    "failures": [],
+    "crashed": null,
+    "notes": {
+      "prod.viewsAfter": {
+        "1": "watcherRuns=1 shared=0",
+        "2": "watcherRuns=1 shared=0",
+        "4": "watcherRuns=1 shared=0"
+      },
+      "prod.errorsAttributedToASession": 0,
+      "prod.consoleErrors": [
+        "boom in module-level watcher"
+      ],
+      "prod.unhandled": [],
+      "prod.othersUpdated": true,
+      "dev.viewsAfter": {
+        "1": "watcherRuns=0 shared=0",
+        "2": "watcherRuns=0 shared=0",
+        "4": "watcherRuns=0 shared=0"
+      },
+      "dev.errorsAttributedToASession": 0,
+      "dev.consoleErrors": [],
+      "dev.unhandled": [
+        "unhandled: boom in module-level watcher"
+      ],
+      "dev.othersUpdated": false
+    },
+    "ms": 314
+  },
+  {
+    "id": "C5",
+    "title": "Closing session 3: no ops, no work, nothing retained; negative control without scope.stop",
+    "kind": "isolation",
+    "pass": true,
+    "failures": [],
+    "crashed": null,
+    "notes": {
+      "withoutScopeStop": {
+        "watcherRuns": [
+          1,
+          1,
+          1,
+          1
+        ],
+        "alive3": [
+          "scope"
+        ]
+      }
+    },
+    "ms": 230
+  },
+  {
+    "id": "C6",
+    "title": "Vue globals: app-level provide, getCurrentInstance after async gaps, module-level effects (prod and dev)",
+    "kind": "isolation",
+    "pass": true,
+    "failures": [],
+    "crashed": null,
+    "notes": {
+      "dev.consoleWarns": [
+        "[Vue warn]: inject() can only be used inside setup() or functional components.",
+        "[Vue warn]: inject() can only be used inside setup() or functional components.",
+        "[Vue warn]: inject() can only be used inside setup() or functional components.",
+        "[Vue warn]: inject() can only be used inside setup() or functional components."
+      ]
+    },
+    "ms": 278
+  },
+  {
+    "id": "C6b",
+    "title": "Shared raw object reached through globalThis becomes reactive across sessions (Vue's one proxy cache)",
+    "kind": "expected-leak",
+    "pass": true,
+    "failures": [],
+    "crashed": null,
+    "notes": {
+      "session4SeesSession1Bump": "watcherRuns=0 shared=1"
+    },
+    "ms": 66
+  },
+  {
+    "id": "C6c",
+    "title": "A host component defined once in the runtime keeps per-session state, emits and slots",
+    "kind": "isolation",
+    "pass": true,
+    "failures": [],
+    "crashed": null,
+    "notes": {},
+    "ms": 69
+  },
+  {
+    "id": "C7",
+    "title": "Realm globals: globalThis and Array.prototype writes in session 1 are visible in 2 and 4; rendering survives",
+    "kind": "expected-leak",
+    "pass": true,
+    "failures": [],
+    "crashed": null,
+    "notes": {},
+    "ms": 62
+  },
+  {
+    "id": "C8",
+    "title": "Shared scheduler: cross-session latency equals single-thread blocking (median of 5)",
+    "kind": "isolation",
+    "pass": true,
+    "failures": [],
+    "crashed": null,
+    "notes": {
+      "sessionOneLatencyMs": {
+        "alone": 0.3,
+        "sameFlushWithSession4Busy30ms": 30.6,
+        "separateTasksWithSession4Busy30ms": 31.9
+      }
+    },
+    "ms": 404
+  },
+  {
+    "id": "C9",
+    "title": "Seeded random interleavings against an oracle: 8 sessions, 5 seeds x 400 ops (open, close, facts, clicks, throws, bursts)",
+    "kind": "isolation",
+    "pass": true,
+    "failures": [],
+    "crashed": null,
+    "notes": {
+      "runs": [
+        {
+          "seed": 1,
+          "ops": 400,
+          "mismatches": 0,
+          "first": null,
+          "treeErrors": 0,
+          "booms": 46,
+          "renderErrors": 148,
+          "foreignErrors": 0,
+          "exited": null
+        },
+        {
+          "seed": 2,
+          "ops": 400,
+          "mismatches": 0,
+          "first": null,
+          "treeErrors": 0,
+          "booms": 53,
+          "renderErrors": 172,
+          "foreignErrors": 0,
+          "exited": null
+        },
+        {
+          "seed": 3,
+          "ops": 400,
+          "mismatches": 0,
+          "first": null,
+          "treeErrors": 0,
+          "booms": 52,
+          "renderErrors": 173,
+          "foreignErrors": 0,
+          "exited": null
+        },
+        {
+          "seed": 4,
+          "ops": 400,
+          "mismatches": 0,
+          "first": null,
+          "treeErrors": 0,
+          "booms": 59,
+          "renderErrors": 172,
+          "foreignErrors": 0,
+          "exited": null
+        },
+        {
+          "seed": 5,
+          "ops": 400,
+          "mismatches": 0,
+          "first": null,
+          "treeErrors": 0,
+          "booms": 55,
+          "renderErrors": 186,
+          "foreignErrors": 0,
+          "exited": null
+        }
+      ]
+    },
+    "ms": 3535
+  },
+  {
+    "id": "C9h",
+    "title": "Same oracle with the last good tree held on a render error (snapshot on recovery): 5 seeds x 400 ops",
+    "kind": "isolation",
+    "pass": true,
+    "failures": [],
+    "crashed": null,
+    "notes": {
+      "runs": [
+        {
+          "seed": 1,
+          "mismatches": 0,
+          "treeErrors": 0,
+          "booms": 46,
+          "renderErrors": 148
+        },
+        {
+          "seed": 2,
+          "mismatches": 0,
+          "treeErrors": 0,
+          "booms": 53,
+          "renderErrors": 172
+        },
+        {
+          "seed": 3,
+          "mismatches": 0,
+          "treeErrors": 0,
+          "booms": 52,
+          "renderErrors": 173
+        },
+        {
+          "seed": 4,
+          "mismatches": 0,
+          "treeErrors": 0,
+          "booms": 59,
+          "renderErrors": 172
+        },
+        {
+          "seed": 5,
+          "mismatches": 0,
+          "treeErrors": 0,
+          "booms": 55,
+          "renderErrors": 186
+        }
+      ]
+    },
+    "ms": 4528
+  },
+  {
+    "id": "C9x",
+    "title": "Control: the same oracle against the global op buffer must fail",
+    "kind": "control",
+    "pass": true,
+    "failures": [],
+    "crashed": null,
+    "notes": {
+      "run": {
+        "seed": 1,
+        "ops": 120,
+        "mismatches": 1,
+        "first": {
+          "op": "boom 1=true",
+          "sid": 1,
+          "got": [],
+          "want": []
+        },
+        "treeErrors": 0,
+        "booms": 1,
+        "renderErrors": 1,
+        "foreignErrors": 0,
+        "exited": null
+      }
+    },
+    "ms": 92
+  }
+]
