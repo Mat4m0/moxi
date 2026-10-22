@@ -73,11 +73,11 @@ Gate vs Measure:
 
 - `AGENTS.md` wins over habits. The spec sections the brief names win over the brief's
   summary of them. If the brief and a spec disagree, stop and ask.
-- Port knowledge, not code, from v1 (`../gwonmac`, read only). Probe code under
-  `../rewrite-research/probes/` and on `archive/probe-*` tags was written for this design and
-  may be ported closely, with tests.
-- **Never start Electron, the real game or a packaged app on the local machine.** No window
-  may open on Matthias's Mac, hidden or not.
+- Port knowledge, not code, from v1 (`Mat4m0/gwonmac`, cloned read-only next to this repo as
+  `../gwonmac`). Probe code on the `probe/*` branches (`archive/probe-*` tags after M0-07) was
+  written for this design and may be ported closely, with tests.
+- **Workers never start Electron, the real game or a packaged app on the local machine.** No
+  window may open on the builder's machine, hidden or not; Electron checks run in CI.
 - **Never read `~/.config/moxi-dev/login.env`** or print anything from it.
 - No fixed ports: listen on port 0 and pass the real port along.
 - Tests: name the realistic bug first; test through the public interface; tables for input
