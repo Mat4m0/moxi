@@ -5,8 +5,9 @@ and Linux, with a launcher, a Hub and plugins. It replaces gwonmac. Matthias
 owns product decisions, live game checks and every publication. Status: before
 1.0.0; nothing is published yet.
 
-Read `docs/ARCHITECTURE.md` before your first change. It owns processes,
-package boundaries, storage and testing.
+Read `docs/ARCHITECTURE.md` before your first change: the short overview of
+processes, packages, trust and testing. The design of record is `docs/spec/`;
+the build order, slice briefs and proofs are `docs/build/`.
 
 ## Commands
 
@@ -27,17 +28,21 @@ pnpm drive <step>       # agents: drive the running Dev app (screens, keys, scre
 - `apps/launcher`, `apps/game`, `apps/plugin-host`: renderers.
 - `packages/contracts`: IPC channels and their schemas.
 - `packages/gwkit`: WASM integration and game facts/actions. No Electron, no Vue.
-- `packages/sdk`: the public plugin API (`@moxi/sdk`) and its test kit.
+- `packages/sdk`: the public plugin API (`@moxi/sdk`), its host contracts and test kit.
+- `packages/hub` (from M3): Hub shell, op applier, HUD layer and panels (game window).
 - `packages/ui`: design tokens and components, including Guild Wars widgets.
-- `plugins/*`: bundled plugins. They import only `@moxi/sdk`.
+- `plugins/*`: bundled plugins. They import only `@moxi/sdk` and `vue`.
 - `compat/`: role specs (source) and signed locator files (generated; never edit).
 
 ## Rules that never bend
 
 1. ArenaNet's downloaded files stay untouched. Derived copies are rebuildable.
 2. Plugins get copied facts and named actions only: no memory, packets, DOM,
-   input or Node. A game action needs a permission and a fresh player action.
-   Multi-step game flows are host actions, never plugin sequences.
+   input or Node. No combat and no economy automation: the catalog holds no
+   such actions. A game action needs a permission and a trusted press by the
+   player; no timer, fact change, network reply or plugin code starts one.
+   Multi-step game flows are host flows: built in, or a chain declared in the
+   manifest that the host runs on one press.
 3. No telemetry. Nothing about the player leaves the machine except what the
    game itself sends, the static files the app downloads, and what the player
    sends on purpose (such as feedback) after seeing what it contains.
@@ -115,7 +120,8 @@ Before 1.0.0, data and APIs may change freely. From the first public release:
   plugin with `"stage": "experimental"`, which only Dev and Beta show.
 - UI changes include a before/after screenshot from `pnpm hub` or the fixture app.
 - Update the owning doc in the same change. Keep docs short; no status
-  ledgers, evidence logs or plans in the repository.
+  ledgers or evidence logs in the repository. The build plan in `docs/build/`
+  holds specs for work, never status.
 - `pnpm check` passes before every commit you report as done.
 
 ## Releases
