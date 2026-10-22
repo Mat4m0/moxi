@@ -54,8 +54,7 @@ without that shared core contradicted each other.
 
 ## Working agreement
 
-- Work on branches, open draft pull requests, never push to `main`. GitHub cannot protect
-  `main` on this plan, so this is by agreement. Matthias merges.
+- Work on branches, open draft pull requests, never push to `main`. Matthias merges.
 - Electron checks (e2e, packaged builds, probes) run in CI. Agents never open app windows
   locally.
 - Live game sessions only after the M8 review, within the AGENTS live rules, on your own
@@ -68,7 +67,7 @@ without that shared core contradicted each other.
 ## Decisions only Matthias makes
 
 Hub chord on Windows/Linux (D8), `game.inventory` in api 1 (Q7), the v1 drop list (D12),
-repo public or private and the macOS CI lane, AppImage release, a standing merge approval,
+the macOS CI lane (free now that the repo is public), AppImage release, a standing merge approval,
 Windows signing, icons, the distribution host and signing keys, the `.deb` maintainer,
 whether removing an account deletes its game data. Each slice that hits one stops and asks.
 
