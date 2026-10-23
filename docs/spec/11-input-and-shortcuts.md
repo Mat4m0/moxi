@@ -419,7 +419,7 @@ A text without `mod+` that is otherwise valid is `needs-mod`; any other text is 
 | Menu, router | none in `apps/desktop/src/shell/main.ts` (default menu) | `setAppMenu`; `attachChordRouter` in `createWindow` (`main.ts:120`), `kind === "game"` | M5-09 |
 | Platform | sniffs at `apps/game/src/hub/App.vue:6`, `Hub.vue:25`, `dev/App.vue:22`, `hub.contract.test.ts:37`; `apps/desktop/src/shell/preload.ts:10-51` has none | `window.moxi.platform`; `packages/hub` gets it from its mount; tests pass it | M4-01, M3-01 |
 | Row-action shortcuts | `Hub.vue:286-297` `matches()` by `event.key`, accepts `alt`; keycaps `Hub.vue:462-472` | `parseShortcut`, `matchesChord`, inactive rules; keycaps from `packages/ui` | M3-01 |
-| Launcher shortcut UI | `apps/launcher/src/components/ShortcutSetting.vue` captures a display string, accepts Option chords and F-keys alone; `launcher-data.ts:59, 75, 177-178, 344-346` | capture a `KeyChord`; `keys.list`, `keys.bind`; 4.2 texts | M7-04, M12-07 |
+| Launcher shortcut UI | none: the launcher Shortcuts page was cut | capture a `KeyChord`; `keys.list`, `keys.bind`; 4.2 texts | M7-04, M12-07 |
 | Dev harness chord | `apps/game/src/hub/dev/App.vue:31-73` | deleted with the harness; `packages/hub/dev/` runs `createChordRouter` on a window `keydown` listener | M6-03, M7-06 |
 | E2E chord | CDP `game.keyboard.press` at `e2e/shell.e2e.ts:171`, `e2e/plugin-isolation.e2e.ts:60`; `pnpm drive key` (`scripts/drive.ts:71`) is CDP too and stays | `pressChord` | M5-09 |
 | Probe router | `probes/PB7-PB9/lib/chord.cjs` (branch `probe/PB7-PB9`) | port as `createChordRouter`; rows from `lib/chord.test.cjs` | M5-09 |

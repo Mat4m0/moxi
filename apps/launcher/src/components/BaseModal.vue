@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
-defineProps<{ labelledby: string; wide?: boolean }>();
+defineProps<{ labelledby: string }>();
 const emit = defineEmits<{ close: [] }>();
 const dialog = ref<HTMLElement>();
 let previous: HTMLElement | null = null;
@@ -47,7 +47,6 @@ onBeforeUnmount(() => {
       <section
         ref="dialog"
         class="modal"
-        :class="{ 'modal-wide': wide }"
         role="dialog"
         aria-modal="true"
         :aria-labelledby="labelledby"

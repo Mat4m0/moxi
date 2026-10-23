@@ -196,14 +196,15 @@ export class PluginHost {
     this.timers.add(timer);
   }
 
-  register(manifest: unknown, script: string, bytes: number) {
+  /** `off` holds the plugin ids the player switched off in Tools; those start disabled. */
+  register(manifest: unknown, script: string, bytes: number, off: ReadonlySet<string> = new Set()) {
     const parsed = parseManifest(manifest);
     if (this.state.plugins[parsed.id]) throw new Error(`Duplicate plugin ${parsed.id}`);
     this.state.plugins[parsed.id] = {
       manifest: parsed,
       script,
       bytes,
-      enabled: true,
+      enabled: !off.has(parsed.id),
       status: "stopped",
       items: [],
       hud: {},
@@ -211,7 +212,8 @@ export class PluginHost {
       settings: Object.fromEntries((parsed.settings ?? []).map((s) => [s.key, s.default])),
     };
     this.changed();
-    if (parsed.activation.includes("game")) void this.ensureStarted(parsed.id);
+    if (!off.has(parsed.id) && parsed.activation.includes("game"))
+      void this.ensureStarted(parsed.id);
   }
 
   ensureStarted(id: string): Promise<boolean> {
@@ -298,6 +300,8 @@ export class PluginHost {
       const recent = (this.crashes.get(id) ?? []).filter((at) => Date.now() - at < 600000);
       recent.push(Date.now());
       this.crashes.set(id, recent);
+      // Runtime only: the player's Tools switch is not changed, and switching the plugin on
+      // again from there clears this.
       if (recent.length >= 3) p.enabled = false;
     }
     this.changed();
@@ -316,7 +320,8 @@ export class PluginHost {
     for (const r of this.running.values()) this.settleQuery(r);
   }
 
-  private setEnabled(id: string, enabled: boolean) {
+  /** The player switched a plugin on or off in Tools. */
+  setEnabled(id: string, enabled: boolean) {
     const p = this.state.plugins[id];
     if (!p) return;
     p.enabled = enabled;

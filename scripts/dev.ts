@@ -125,8 +125,14 @@ async function launch() {
   try {
     if (electron) await stop(electron);
     if (!stopping) {
-      electron = start(String(electronBinary), [resolve(root, "apps/desktop")], root, env);
-      console.log(`[dev] Electron started (PID ${electron.pid}), CDP 127.0.0.1:${port}`);
+      const app = start(String(electronBinary), [resolve(root, "apps/desktop")], root, env);
+      electron = app;
+      // The app quits when its last window closes; `pnpm dev` ends with it. A restart for a
+      // rebuild stops the old app inside `launch`, where `restarting` is set.
+      app.once("exit", () => {
+        if (electron === app && !restarting && !stopping) void shutdown(0);
+      });
+      console.log(`[dev] Electron started (PID ${app.pid}), CDP 127.0.0.1:${port}`);
     }
   } finally {
     restarting = false;

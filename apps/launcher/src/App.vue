@@ -1,47 +1,29 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref, watch } from "vue";
-import { applyAppearance } from "@moxi/ui";
+import { computed, nextTick, onMounted, ref } from "vue";
 import { AlertTriangle } from "lucide-vue-next";
-import type { LauncherData, LauncherRoute, Profile, SettingsRoute } from "./launcher-data";
+import type { Account, LauncherData, LauncherRoute, SettingsRoute } from "./launcher-data";
 import AccountsView from "./components/AccountsView.vue";
 import AccountEditor from "./components/AccountEditor.vue";
-import AppearanceSettings from "./components/AppearanceSettings.vue";
 import GameFilesSettings from "./components/GameFilesSettings.vue";
-import GeneralUpdateSettings from "./components/GeneralUpdateSettings.vue";
-import HomeView from "./components/HomeView.vue";
 import LauncherHeader from "./components/LauncherHeader.vue";
-import LaunchBar from "./components/LaunchBar.vue";
-import ShortcutSetting from "./components/ShortcutSetting.vue";
-const props = defineProps<{ data: LauncherData; embedded?: boolean }>();
+import ReadinessBar from "./components/ReadinessBar.vue";
+import ToolsSettings from "./components/ToolsSettings.vue";
+const props = defineProps<{ data: LauncherData }>();
 const state = props.data.state;
-watch(
-  () => state.value.settings,
-  (settings) => applyAppearance(document.documentElement, settings),
-  { immediate: true },
-);
 const ready = ref(false);
 const startupError = ref(false);
 const error = ref("");
 const busy = ref(false);
-const route = ref<LauncherRoute>("home");
-const panel = ref<SettingsRoute>("general");
-const editing = ref<{ profile: Profile | null } | null>(null);
+const route = ref<LauncherRoute>("accounts");
+const panel = ref<SettingsRoute>("tools");
+const editing = ref<{ account: Account | null } | null>(null);
+const marked = computed(() =>
+  state.value.accounts.filter((account) => !account.archived && account.selected),
+);
 const content = ref<HTMLElement>();
-const groups = [
-  {
-    label: "Launcher",
-    items: [
-      { id: "general", label: "Updates" },
-      { id: "shortcuts", label: "Shortcuts" },
-    ],
-  },
-  {
-    label: "Game",
-    items: [
-      { id: "appearance", label: "Appearance" },
-      { id: "game-files", label: "Game files" },
-    ],
-  },
+const sections = [
+  { id: "tools", label: "Tools" },
+  { id: "game-files", label: "Game files" },
 ] as const;
 async function initialize() {
   startupError.value = false;
@@ -53,6 +35,10 @@ async function initialize() {
   }
 }
 onMounted(initialize);
+// Main brings the launcher back at Accounts when the Accounts menu cannot open an account.
+props.data.onNavigate(() => {
+  route.value = "accounts";
+});
 async function settings(section: SettingsRoute) {
   panel.value = section;
   route.value = "settings";
@@ -64,38 +50,31 @@ async function settings(section: SettingsRoute) {
     heading?.focus({ preventScroll: true });
   }
 }
-async function play(id?: string) {
-  if (busy.value || state.value.readiness.state === "preparing") return;
+async function play(ids: readonly string[]) {
+  if (busy.value || state.value.readiness.state === "preparing") return false;
   if (state.value.readiness.state === "repair-required") {
     await settings("game-files");
-    return;
-  }
-  const ids = id ? [id] : state.value.selectedProfileIds;
-  const profiles = state.value.profiles.filter(
-    (profile) => ids.includes(profile.id) && !profile.archived,
-  );
-  if (
-    !profiles.length ||
-    profiles.some((profile) => ["opening", "checking"].includes(profile.state))
-  )
-    return;
-  if (profiles.some((profile) => profile.state === "queued")) {
-    for (const profile of profiles) props.data.cancel(profile.id);
-    return;
+    return false;
   }
   busy.value = true;
   error.value = "";
   try {
-    await props.data.play(
-      profiles
-        .filter((profile) => profile.state !== "running" || profiles.length === 1)
-        .map((profile) => profile.id),
-    );
+    await props.data.play(ids);
+    return true;
   } catch {
     error.value = "Guild Wars could not be opened. Your account data was not changed. Try again.";
+    return false;
   } finally {
     busy.value = false;
   }
+}
+// Several marked accounts start the closed ones; with none closed, the first one is shown.
+async function playSelected() {
+  const [first] = marked.value;
+  if (!first) return;
+  const closed = marked.value.filter((account) => account.state !== "running");
+  const ids = marked.value.length === 1 || !closed.length ? [first.id] : closed.map((a) => a.id);
+  await play(ids);
 }
 </script>
 <template>
@@ -106,39 +85,28 @@ async function play(id?: string) {
     <button class="primary" @click="initialize">Try again</button>
   </div>
   <div v-else-if="!ready" class="launcher-boot" role="status">Opening launcher…</div>
-  <div
-    v-else
-    class="app-shell"
-    :class="{ 'accounts-shell': route === 'accounts', 'settings-shell': route === 'settings' }"
-  >
+  <div v-else class="app-shell">
     <LauncherHeader
       :route="route"
       :product-name="state.productName"
       :version="state.version"
-      :embedded="!!embedded"
       @navigate="route = $event"
     />
     <main>
-      <HomeView v-if="route === 'home'" :data="data" /><AccountsView
-        v-else-if="route === 'accounts'"
+      <AccountsView
+        v-if="route === 'accounts'"
         :data="data"
         :busy="busy"
-        @edit="editing = { profile: $event }"
-        @play="play"
+        @edit="editing = { account: $event }"
+        @play="play([$event])"
+        @play-selected="playSelected"
       />
       <section v-else class="settings-page">
         <aside aria-label="Settings sections">
           <h2>Settings</h2>
-          <div
-            v-for="group in groups"
-            :key="group.label"
-            class="settings-nav-group"
-            role="group"
-            :aria-label="group.label"
-          >
-            <h3>{{ group.label }}</h3>
+          <div class="settings-nav-group">
             <button
-              v-for="item in group.items"
+              v-for="item in sections"
               :key="item.id"
               :aria-current="panel === item.id ? 'page' : undefined"
               :class="{ active: panel === item.id }"
@@ -151,10 +119,7 @@ async function play(id?: string) {
         <div ref="content" class="settings-content">
           <fieldset class="settings-fields">
             <legend class="visually-hidden">Settings for every account</legend>
-            <GeneralUpdateSettings v-if="panel === 'general'" :data="data" /><AppearanceSettings
-              v-else-if="panel === 'appearance'"
-              :data="data"
-            /><GameFilesSettings v-else-if="panel === 'game-files'" :data="data" /><ShortcutSetting
+            <ToolsSettings v-if="panel === 'tools'" :data="data" /><GameFilesSettings
               v-else
               :data="data"
             />
@@ -162,16 +127,12 @@ async function play(id?: string) {
         </div>
       </section>
     </main>
-    <LaunchBar
+    <ReadinessBar
       :data="data"
-      :busy="busy"
       :error="error"
-      :viewing-game-files="route === 'settings' && panel === 'game-files'"
-      @play="play"
-      @manage="route = 'accounts'"
       @game-files="settings('game-files')"
       @dismiss="error = ''"
     />
-    <AccountEditor v-if="editing" :data="data" :profile="editing.profile" @close="editing = null" />
+    <AccountEditor v-if="editing" :data="data" :account="editing.account" @close="editing = null" />
   </div>
 </template>

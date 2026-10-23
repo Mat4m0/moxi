@@ -27,10 +27,3 @@ Use is subject to [ArenaNet's content terms](https://www.arena.net/en/legal/cont
 The accepted `gw-ui-study` reconstruction supplied lossless PNGs from unaltered
 Minimalus UI Mod 3.2 textures: `GW.EXE_0x0BE51B7C.dds` (body) and
 `GW.EXE_0xF820FC56.dds` (header).
-
-## Guild Wars Reforged launcher artwork
-
-`apps/launcher/src/assets/bg-reforged.jpg` and `apps/launcher/src/assets/reforged-logo.webp`
-were published by ArenaNet for Guild Wars Reforged. They and the Guild Wars marks remain the
-property of ArenaNet or their respective owners, are not relicensed under GPL-3.0-only, and
-their inclusion does not grant permission to reuse them separately.

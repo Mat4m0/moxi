@@ -4,7 +4,8 @@ import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { createAppearanceSettings } from "./appearance";
+import { createToolSettings } from "./tool-settings";
+import { createWindowStateSettings } from "./window-state";
 import {
   openDatabase,
   migrations,
@@ -14,6 +15,8 @@ import {
   type Migration,
 } from "./index";
 
+// Versions the tests add on top of the real migrations.
+const latest = migrations.length;
 const directories: string[] = [];
 const databases: Database[] = [];
 function setup() {
@@ -52,23 +55,26 @@ test("opening without schema migrations cannot silently create unversioned table
       .prepare("SELECT name FROM sqlite_schema WHERE type = 'table' ORDER BY name")
       .all()
       .map((row) => row.name),
-  ).toEqual(["credentials", "documents", "settings"]);
-  expect(migrated.prepare("PRAGMA user_version").get()?.user_version).toBe(1);
+  ).toEqual(["accounts", "credentials", "documents", "settings"]);
+  expect(migrated.prepare("PRAGMA user_version").get()?.user_version).toBe(latest);
 });
 
 test("a failed second pending migration cannot leave the first migration or version committed", () => {
   const fixture = setup();
   const db = fixture.open([
     ...migrations,
-    { version: 2, sql: "CREATE TABLE player (name TEXT); INSERT INTO player VALUES ('original');" },
+    {
+      version: latest + 1,
+      sql: "CREATE TABLE player (name TEXT); INSERT INTO player VALUES ('original');",
+    },
   ]);
   db.exec("INSERT INTO player VALUES ('wal-data')");
   db.close();
   expect(() =>
     fixture.open([
       ...migrations,
-      { version: 3, sql: "UPDATE player SET name = 'changed'" },
-      { version: 4, sql: "INSERT INTO missing_table VALUES (1)" },
+      { version: latest + 2, sql: "UPDATE player SET name = 'changed'" },
+      { version: latest + 3, sql: "INSERT INTO missing_table VALUES (1)" },
     ]),
   ).toThrow();
   const reopened = fixture.open();
@@ -78,7 +84,7 @@ test("a failed second pending migration cannot leave the first migration or vers
       .all()
       .map((row) => row.name),
   ).toEqual(["original", "wal-data"]);
-  expect(reopened.prepare("PRAGMA user_version").get()?.user_version).toBe(2);
+  expect(reopened.prepare("PRAGMA user_version").get()?.user_version).toBe(latest + 1);
   const backups = readdirSync(fixture.backupDir);
   expect(backups).toHaveLength(1);
   const backupName = backups[0];
@@ -91,7 +97,7 @@ test("a failed second pending migration cannot leave the first migration or vers
       .all()
       .map((row) => row.name),
   ).toEqual(["original", "wal-data"]);
-  expect(backup.prepare("PRAGMA user_version").get()?.user_version).toBe(2);
+  expect(backup.prepare("PRAGMA user_version").get()?.user_version).toBe(latest + 1);
 });
 
 test("a fourth migration backup removes the oldest while reopening without migrations adds none", () => {
@@ -100,7 +106,7 @@ test("a fourth migration backup removes the oldest while reopening without migra
   fixture.open().close();
   for (const day of [1, 2, 3, 4]) {
     vi.setSystemTime(new Date(`2026-10-0${day}T12:00:00Z`));
-    fixture.open([...migrations, { version: day + 1, sql: "SELECT 1" }]).close();
+    fixture.open([...migrations, { version: latest + day, sql: "SELECT 1" }]).close();
   }
   fixture.open().close();
   expect(readdirSync(fixture.backupDir).sort()).toEqual([
@@ -115,8 +121,12 @@ test("repeated migration attempts in one millisecond cannot overwrite an earlier
   vi.setSystemTime(new Date("2026-10-04T12:00:00Z"));
   const fixture = setup();
   fixture.open().close();
-  fixture.open([...migrations, { version: 2, sql: "CREATE TABLE item (name TEXT)" }]).close();
-  fixture.open([...migrations, { version: 3, sql: "INSERT INTO item VALUES ('saved')" }]).close();
+  fixture
+    .open([...migrations, { version: latest + 1, sql: "CREATE TABLE item (name TEXT)" }])
+    .close();
+  fixture
+    .open([...migrations, { version: latest + 2, sql: "INSERT INTO item VALUES ('saved')" }])
+    .close();
   expect(readdirSync(fixture.backupDir).sort()).toEqual([
     "0.1.0-2026-10-04T12-00-00.000Z.sqlite",
     "0.1.0-2026-10-04T12-00-00.001Z.sqlite",
@@ -130,7 +140,10 @@ test.each([[0], [1, 1], [2, 1], [1.5], [2147483648]])(
     fixture
       .open([
         ...migrations,
-        { version: 2, sql: "CREATE TABLE item (name TEXT); INSERT INTO item VALUES ('saved')" },
+        {
+          version: latest + 1,
+          sql: "CREATE TABLE item (name TEXT); INSERT INTO item VALUES ('saved')",
+        },
       ])
       .close();
     expect(() =>
@@ -152,19 +165,17 @@ test.each([[0], [1, 1], [2, 1], [1.5], [2147483648]])(
 test.each([
   ["invalid JSON", "{"],
   ["wrong type", '"loud"'],
+  ["a bad plugin id", '["../escape"]'],
 ])("a stored setting with %s falls back without repeated log lines", (_reason, json) => {
   const db = setup().open();
-  db.prepare("INSERT INTO settings VALUES (?, ?)").run("uiPanelOpacity", json);
+  db.prepare("INSERT INTO settings VALUES (?, ?)").run("disabledTools", json);
   const logs: string[] = [];
-  const settings = createAppearanceSettings(db, (message) => logs.push(message));
-  expect(settings.get()).toEqual({ uiStyle: "classic", uiPanelOpacity: 94, uiFont: "guild-wars" });
-  settings.get();
-  expect(logs).toEqual(['Invalid stored setting "uiPanelOpacity"; using default.']);
-  expect(() =>
-    settings.set({ uiStyle: "classic", uiPanelOpacity: 101, uiFont: "guild-wars" }),
-  ).toThrow();
-  settings.set({ uiStyle: "classic", uiPanelOpacity: 75, uiFont: "guild-wars" });
-  expect(settings.get()).toEqual({ uiStyle: "classic", uiPanelOpacity: 75, uiFont: "guild-wars" });
+  const settings = createToolSettings(db, (message) => logs.push(message));
+  expect(settings.disabled()).toEqual([]);
+  settings.disabled();
+  expect(logs).toEqual(['Invalid stored setting "disabledTools"; using default.']);
+  settings.set("moxi.builds", false);
+  expect(settings.disabled()).toEqual(["moxi.builds"]);
 });
 
 test("stale document writes cannot overwrite fresh data or send a change event", () => {
@@ -259,14 +270,35 @@ test("saved credentials survive reopening as encrypted blobs and clear removes t
   expect(reopened.load("test-account")).toBeNull();
 });
 
-test("appearance saved through Main settings survives reopening the database", () => {
+test("a tool switched off stays off after reopening the database, and switching it on again forgets it", () => {
   const fixture = setup();
   const db = fixture.open();
-  createAppearanceSettings(db).set({ uiStyle: "obsidian", uiPanelOpacity: 80, uiFont: "inter" });
+  const tools = createToolSettings(db);
+  expect(tools.disabled()).toEqual([]);
+  tools.set("moxi.target-distance", false);
+  tools.set("moxi.builds", false);
+  tools.set("moxi.builds", false);
   db.close();
-  expect(createAppearanceSettings(fixture.open()).get()).toEqual({
-    uiStyle: "obsidian",
-    uiPanelOpacity: 80,
-    uiFont: "inter",
-  });
+  const reopened = createToolSettings(fixture.open());
+  expect(reopened.disabled()).toEqual(["moxi.builds", "moxi.target-distance"]);
+  reopened.set("moxi.builds", true);
+  expect(reopened.disabled()).toEqual(["moxi.target-distance"]);
+});
+
+test("window state saved through Main settings survives reopening, and a bad row reads as nothing saved", () => {
+  const fixture = setup();
+  const db = fixture.open();
+  const state = { x: 10, y: 20, width: 1000, height: 700, fullscreen: true, maximized: false };
+  createWindowStateSettings(db).set("game", state);
+  db.close();
+  const reopened = fixture.open();
+  const log = vi.fn();
+  const settings = createWindowStateSettings(reopened, log);
+  expect(settings.get("game")).toEqual(state);
+  expect(settings.get("launcher")).toBeNull();
+  reopened
+    .prepare("UPDATE settings SET json = ? WHERE key = 'gameWindow'")
+    .run('{"x":"left","width":-5}');
+  expect(settings.get("game")).toBeNull();
+  expect(log).toHaveBeenCalledTimes(1);
 });

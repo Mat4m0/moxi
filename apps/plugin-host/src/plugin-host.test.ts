@@ -652,3 +652,38 @@ test.each([
     expect(h.host.state.plugins["test.protocol"]!.status).toBe(crashed ? "crashed" : "running");
   },
 );
+
+const second = {
+  id: "test.off",
+  name: "Switched off",
+  version: "1.0.0",
+  api: 1,
+  description: "A plugin the player switched off in Tools.",
+  permissions: [],
+  activation: ["hub"],
+  commands: [],
+};
+
+test("a plugin switched off in Tools before it registers starts disabled and stays stopped", async () => {
+  const h = harness();
+  h.host.register(second, "fixture", 0, new Set(["test.off"]));
+  h.send({ t: "openHub" });
+  await h.command("clear");
+  expect(h.host.state.plugins["test.off"]).toMatchObject({ enabled: false, status: "stopped" });
+  expect(h.host.state.plugins["test.protocol"]).toMatchObject({ enabled: true, status: "running" });
+});
+
+test("switching a plugin off stops its worker and switching it on lets it start again", async () => {
+  const h = harness();
+  await h.command("clear");
+  expect(h.host.state.plugins["test.protocol"]!.status).toBe("running");
+  h.host.setEnabled("test.protocol", false);
+  expect(h.host.state.plugins["test.protocol"]).toMatchObject({
+    enabled: false,
+    status: "stopped",
+  });
+  expect(h.terminated()).toBe(1);
+  h.host.setEnabled("test.protocol", true);
+  await h.command("clear");
+  expect(h.host.state.plugins["test.protocol"]).toMatchObject({ enabled: true, status: "running" });
+});

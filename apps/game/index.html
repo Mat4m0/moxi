@@ -42,10 +42,72 @@
       [hidden] {
         display: none;
       }
+      /* The client focuses these fields to read text. They sit behind the canvas, not hidden:
+         focus() fails on display:none and the glue gives up. */
+      .osk-input-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        z-index: -1;
+      }
+      .osk-input {
+        width: 80%;
+        font-size: 1.5rem;
+      }
     </style>
   </head>
   <body>
     <canvas id="canvas" width="960" height="640" tabindex="0" aria-label="Guild Wars"></canvas>
+    <div class="osk-input-container">
+      <input
+        type="text"
+        id="osk-input-text"
+        class="osk-input"
+        tabindex="-1"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+      />
+      <input
+        type="email"
+        id="osk-input-email"
+        class="osk-input"
+        tabindex="-1"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+      />
+      <input
+        type="password"
+        id="osk-input-password"
+        class="osk-input"
+        tabindex="-1"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+      />
+      <input
+        type="number"
+        id="osk-input-number"
+        class="osk-input"
+        tabindex="-1"
+        autocomplete="off"
+      />
+      <textarea
+        id="osk-input-multiline"
+        class="osk-input"
+        rows="3"
+        tabindex="-1"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+      ></textarea>
+    </div>
     <div role="status">Starting Guild Wars…</div>
     <div id="hub-root"></div>
     <script type="module" src="/src/index.ts"></script>

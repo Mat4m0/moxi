@@ -40,6 +40,8 @@ function imports(allowed: string[], otherPackages: string[], sdkTypesOnly = fals
 const desktopImports = [
   "@moxi/contracts",
   "@moxi/contracts/windows",
+  "@moxi/contracts/web",
+  "@moxi/contracts/account-name",
   "@moxi/gwkit",
   "arktype",
   "node:*",
@@ -77,7 +79,14 @@ export default defineConfig({
       {
         files: ["apps/launcher/**"],
         rules: imports(
-          ["vue", "@moxi/contracts", "@moxi/ui", "@moxi/ui/*", "lucide-vue-next"],
+          [
+            "vue",
+            "@moxi/contracts",
+            "@moxi/contracts/account-name",
+            "@moxi/ui",
+            "@moxi/ui/*",
+            "lucide-vue-next",
+          ],
           rendererPackages.filter((name) => name !== "launcher"),
         ),
       },
@@ -87,6 +96,7 @@ export default defineConfig({
           [
             "vue",
             "@moxi/contracts",
+            "@moxi/contracts/web",
             "@moxi/ui",
             "@moxi/ui/*",
             "@moxi/gwkit",

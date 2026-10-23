@@ -4,13 +4,17 @@ export const windowChannels = {
     "download.resume",
     "client.readiness",
     "client.retry",
-    "appearance.get",
-    "appearance.set",
+    "tools.list",
+    "tools.set",
     "app.info",
-    "game.open",
+    "accounts.list",
+    "accounts.save",
+    "accounts.archive",
+    "accounts.remove",
+    "accounts.select",
+    "accounts.play",
   ],
   game: [
-    "appearance.get",
     "app.info",
     "game.client",
     "game.net.connect",
@@ -21,7 +25,7 @@ export const windowChannels = {
     "game.net.healthy",
     "game.client.failed",
   ],
-  pluginHost: ["plugin.doc.read", "plugin.doc.write", "plugin.bundles"],
+  pluginHost: ["plugin.doc.read", "plugin.doc.write", "plugin.bundles", "tools.list"],
 } as const;
 export type WindowKind = keyof typeof windowChannels;
 

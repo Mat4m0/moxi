@@ -34,7 +34,17 @@ export function createGameNetwork(
 ) {
   const owners = new Map<
     number,
-    Map<number, { socket: Socket; incoming: number; outgoing: number; reason: string }>
+    Map<
+      number,
+      {
+        socket: Socket;
+        incoming: number;
+        outgoing: number;
+        reason: string;
+        received: number;
+        sent: number;
+      }
+    >
   >();
   const connected = new Set<number>();
   const closed = new Map<number, Set<number>>();
@@ -53,17 +63,19 @@ export function createGameNetwork(
       if (sockets.has(id) || sockets.size >= 32) throw new Error("Too many game connections.");
       owners.set(owner, sockets);
       const socket = new Socket();
-      const entry = { socket, incoming: 0, outgoing: 0, reason: "remote" };
+      const entry = { socket, incoming: 0, outgoing: 0, reason: "remote", received: 0, sent: 0 };
       closed.get(owner)?.delete(id);
       sockets.set(id, entry);
       console.info(`[net] connect ${host}:${port}`);
       socket.on("connect", () => {
+        console.info(`[net] open ${host}:${port}`);
         socket.setTimeout(0);
         connected.add(owner);
         emit(owner, { id, kind: "open" });
       });
       socket.on("data", (bytes) => {
         entry.incoming += bytes.length;
+        entry.received += bytes.length;
         if (entry.incoming > BUFFER_LIMIT) {
           entry.reason = "buffer limit";
           socket.destroy();
@@ -87,7 +99,9 @@ export function createGameNetwork(
         }
         sockets.delete(id);
         if (!sockets.size && owners.get(owner) === sockets) owners.delete(owner);
-        console.info(`[net] close ${host}:${port} ${entry.reason}`);
+        console.info(
+          `[net] close ${host}:${port} ${entry.reason} in=${entry.received} out=${entry.sent}`,
+        );
         emit(owner, { id, kind: "close" });
       });
       socket.setTimeout(30000);
@@ -105,6 +119,7 @@ export function createGameNetwork(
         throw new Error("Game connection buffer limit exceeded.");
       }
       entry.outgoing += bytes.byteLength;
+      entry.sent += bytes.byteLength;
       entry.socket.write(bytes, () => {
         entry.outgoing -= bytes.byteLength;
       });

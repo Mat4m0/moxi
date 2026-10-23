@@ -99,6 +99,21 @@ other Main code is plain Node, so Vitest runs it without Electron.
   Main validates plugin-host-only document channels, serializes revision-checked
   writes and broadcasts copied values to plugin sessions. Stale writes are refused.
   Plugin documents never use browser storage.
+- Main saves the launcher and game window placement as settings (normal bounds plus full screen
+  or maximized). A first launch opens both maximized; bounds that no display shows any
+  more are brought back into view.
+- Accounts are rows `(id, name, archived, created_at)`. A first run creates one
+  account. Whether an account is open comes from its game window, never from storage. Each
+  account's game window runs in its own browser partition, `persist:account-<id>`, so two
+  accounts share no cookies or saved game files. Deleting an archived account also deletes its
+  partition, its plugin documents and its stored login. The accounts marked for "Play selected"
+  are the `selectedAccounts` setting; Main keeps it and an archived or deleted account loses its mark.
+- Window policy (`apps/desktop/src/window-policy.ts`): after Play the launcher hides and the first
+  account's game window is in front. Closing the launcher while a game is open hides it. Closing
+  the last game window brings it back. Closing it with no game open, or quitting, ends the app.
+  On macOS the Accounts menu lists the accounts that are not archived: an item opens a closed
+  account or shows an open one, and Manage Accounts brings the launcher back at Accounts. The menu
+  is rebuilt only when an account name or state changes.
 - Credentials are stored with `safeStorage`. On Linux, saving is refused when
   the backend is `basic_text`.
 
@@ -142,6 +157,10 @@ ArenaNet manifest → bounded parse → executable artifacts (hash-verified)
 - The game renderer owns the Emscripten `Module`. It loads the official glue
   and module from `moxi://app`, mounts IDBFS for templates and screenshots,
   and forwards TCP and DNS to Main.
+- The client's own web calls (login, account) reach ArenaNet only through one stateless Main proxy
+  at `moxi://app/<route>/...`. The routes are a closed list of five hosts (`@moxi/contracts/web`);
+  no cookies cross it in either direction and redirects may not leave the host. The game page
+  points the client's requests at it.
 - Every memory address or struct offset used by `game` comes from a locator
   value, which comes from an operand of a located function (the witness rule).
   If ArenaNet changes a struct, its reader stops matching and only that fact
@@ -173,6 +192,10 @@ See `packages/sdk/README.md` for the contract. The host rules:
   plugin's UI (3 s, single use). Multi-step flows are host actions.
 - A plugin that does not answer a ping for 2.5 s is stopped. Three crashes in
   ten minutes disable it until the player re-enables it.
+- The launcher's Settings → Tools switches each bundled plugin on or off for every account. Main
+  stores the off ones in the `disabledTools` setting, hands them to the plugin host when it
+  registers the plugins, and sends each later switch to the host at once. The crash disable above
+  is runtime only: the switch is not changed, and switching the plugin on again clears it.
 
 ## Hub
 
