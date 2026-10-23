@@ -3,6 +3,7 @@ import type { Bridge } from "@moxi/contracts";
 import { createRuntime } from "@moxi/gwkit";
 import { mountGameFilesystem } from "./filesystem";
 import { createSocketHost } from "./socket-host";
+import { installOffscreenPresentation } from "./graphics";
 import { createImage } from "./image";
 import { installWebRewrite } from "./web";
 import { installGameInput, type OskInput } from "./input";
@@ -111,6 +112,11 @@ async function boot() {
       );
     },
     instantiateWasm(imports, success) {
+      installOffscreenPresentation({
+        env: imports.env,
+        module: Module,
+        log: (text) => console.info("[client]", text),
+      });
       void WebAssembly.compileStreaming(fetch("moxi://app/client/Gw.jspi.wasm"))
         .then((bytes) => game.instantiateWasm(imports, success, bytes))
         .catch(() => fail("The game client could not start. Run fetch-client and restart Moxi."));
