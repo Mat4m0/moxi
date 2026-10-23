@@ -53,6 +53,10 @@ async function initialize() {
   }
 }
 onMounted(initialize);
+// Main brings the launcher back at Accounts when the Accounts menu cannot open an account.
+props.data.onNavigate(() => {
+  route.value = "accounts";
+});
 async function settings(section: SettingsRoute) {
   panel.value = section;
   route.value = "settings";

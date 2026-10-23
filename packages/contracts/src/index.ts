@@ -133,6 +133,8 @@ import { windowChannels, type WindowKind } from "./windows.js";
 import { accountId, accountList, accountSave, type Account } from "./accounts.js";
 export { accountAppearance, accountId, type Account, type AccountSave } from "./accounts.js";
 export { hubPortMessage, windowChannels, type WindowKind } from "./windows.js";
+/** Where Main asks the launcher to go when it brings the launcher back, e.g. from the Accounts menu. */
+export type LauncherDestination = "accounts";
 export type ChannelName = keyof typeof channels;
 export type RequestOf<N extends ChannelName> = (typeof channels)[N]["request"]["infer"];
 export type ResponseOf<N extends ChannelName> = (typeof channels)[N]["response"]["infer"];
@@ -150,6 +152,7 @@ export type Bridge<K extends WindowKind> = {
     ? {
         onReadinessChanged(listener: (readiness: Readiness) => void): () => void;
         onAccountsChanged(listener: (accounts: Account[]) => void): () => void;
+        onNavigate(listener: (destination: LauncherDestination) => void): () => void;
       }
     : K extends "pluginHost"
       ? {

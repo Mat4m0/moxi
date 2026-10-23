@@ -2,6 +2,7 @@ import {
   app,
   BrowserWindow,
   Menu,
+  MenuItem,
   MessageChannelMain,
   net,
   protocol,
@@ -18,7 +19,7 @@ import { resolveFolders } from "../folders.js";
 import { createGameWeb } from "../game-web/index.js";
 import { resolveRendererPath } from "../protocol-path.js";
 import { hubPortMessage } from "@moxi/contracts/windows";
-import type { Account, WindowKind } from "@moxi/contracts";
+import type { Account, LauncherDestination, WindowKind } from "@moxi/contracts";
 import { handle } from "./ipc.js";
 import { createGameNetwork } from "../game-network/index.js";
 import { createClientCache } from "../game-files/client.ts";
@@ -33,6 +34,14 @@ import { pluginCsp } from "../plugin-isolation.ts";
 import { createAppearanceSettings } from "../storage/appearance.js";
 import { createWindowStateSettings } from "../storage/window-state.js";
 import { captureWindow, planWindow, type SavedWindowKind } from "../window-state.js";
+import {
+  accountMenuModel,
+  afterPlay,
+  onGameClosed,
+  onLauncherClose,
+  sameMenuModel,
+  type AccountMenuEntry,
+} from "../window-policy.js";
 
 const repoRoot = resolve(import.meta.dirname, "../../..");
 const identity = resolveIdentity(app.isPackaged);
@@ -206,6 +215,81 @@ function broadcastAccounts() {
   for (const { kind, window } of windows.values())
     if (kind === "launcher" && !window.isDestroyed())
       window.webContents.send("accounts.changed", list);
+  refreshAccountsMenu();
+}
+function openGameCount() {
+  return [...gameByAccount.values()].filter((window) => !window.isDestroyed()).length;
+}
+let quitting = false;
+// Opens or shows each account's game window, then steps the launcher aside. The first account
+// ends up in front. A refusal (the client is not ready) leaves the launcher where it is.
+function playAccounts(ids: readonly string[]) {
+  readiness.assertPlayable();
+  const stored = accounts.list().filter((entry) => !entry.archived);
+  const playable = new Set(stored.map((entry) => entry.id));
+  const shown: BrowserWindow[] = [];
+  for (const step of gameWindows.play(ids, playable)) {
+    const existing = gameByAccount.get(step.accountId);
+    if (step.do === "show" && existing && !existing.isDestroyed()) {
+      reveal(existing);
+      shown.push(existing);
+      continue;
+    }
+    const entry = stored.find((candidate) => candidate.id === step.accountId);
+    if (!entry) continue;
+    const created = createWindow("game", { id: entry.id, name: entry.name });
+    reveal(created);
+    shown.push(created);
+  }
+  if (afterPlay(shown.length) === "hide-launcher") {
+    reveal(shown[0]!);
+    launcher?.hide();
+  }
+  broadcastAccounts();
+}
+function activateAccount(id: string) {
+  try {
+    playAccounts([id]);
+  } catch {
+    showLauncher("accounts");
+  }
+}
+// Native menu: macOS only, like the rest of the menu. It is rebuilt only when an account name or
+// state changed, so a menu the player has open is not disturbed.
+let installedMenu: AccountMenuEntry[] | undefined;
+function installApplicationMenu(entries: AccountMenuEntry[]) {
+  if (process.platform !== "darwin") {
+    Menu.setApplicationMenu(null);
+    return;
+  }
+  installedMenu = entries;
+  const menu = Menu.buildFromTemplate([
+    { role: "appMenu" },
+    {
+      label: "Accounts",
+      submenu: [
+        { label: "Manage Accounts…", click: () => showLauncher("accounts") },
+        { type: "separator" },
+        ...entries.map((entry) => ({
+          label: entry.label,
+          enabled: entry.enabled,
+          click: () => activateAccount(entry.id),
+        })),
+      ],
+    },
+    { role: "editMenu" },
+    { role: "windowMenu" },
+  ]);
+  const windowMenu = menu.items.find((item) => item.role?.toLowerCase() === "windowmenu")?.submenu;
+  windowMenu?.append(new MenuItem({ type: "separator" }));
+  windowMenu?.append(new MenuItem({ label: "Show Launcher", click: () => showLauncher() }));
+  Menu.setApplicationMenu(menu);
+}
+function refreshAccountsMenu() {
+  if (process.platform !== "darwin") return;
+  const entries = accountMenuModel(currentAccounts());
+  if (installedMenu && sameMenuModel(installedMenu, entries)) return;
+  installApplicationMenu(entries);
 }
 function createWindow(kind: WindowKind, account?: { id: string; name: string }) {
   const routes =
@@ -304,6 +388,13 @@ function createWindow(kind: WindowKind, account?: { id: string; name: string }) 
     });
     win.webContents.on("render-process-gone", () => end(true));
   }
+  if (kind === "launcher")
+    win.on("close", (event) => {
+      if (onLauncherClose({ gameWindows: openGameCount(), quitting }) === "hide") {
+        event.preventDefault();
+        win.hide();
+      }
+    });
   win.on("closed", () => {
     network.closeWindow(id);
     sessions.delete(id);
@@ -314,6 +405,8 @@ function createWindow(kind: WindowKind, account?: { id: string; name: string }) 
       if (gameByAccount.get(accountId) === win) gameByAccount.delete(accountId);
       gameWindows.ended(accountId, crashedWindow);
       broadcastAccounts();
+      if (onGameClosed({ gameWindows: openGameCount(), quitting }) === "reveal-launcher")
+        showLauncher();
     }
     if (![...windows.values()].some((entry) => entry.kind !== "pluginHost")) app.quit();
   });
@@ -336,31 +429,31 @@ function createWindow(kind: WindowKind, account?: { id: string; name: string }) 
 function prepareKeyboard() {
   if (process.platform === "darwin") {
     systemPreferences.setUserDefault("ApplePressAndHoldEnabled", "boolean", false);
-    Menu.setApplicationMenu(
-      Menu.buildFromTemplate([{ role: "appMenu" }, { role: "editMenu" }, { role: "windowMenu" }]),
-    );
-  } else {
-    Menu.setApplicationMenu(null);
   }
+  installApplicationMenu([]);
 }
 function reveal(win: BrowserWindow) {
   if (background) return win.showInactive();
   win.show();
   win.focus();
 }
-function showLauncher() {
+function showLauncher(destination?: LauncherDestination) {
   if (!launcher || launcher.isDestroyed()) launcher = createWindow("launcher");
   if (launcher.isMinimized()) launcher.restore();
   reveal(launcher);
+  if (destination) launcher.webContents.send("launcher.navigate", destination);
 }
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on("second-instance", () => {
     if (app.isReady()) showLauncher();
-    else void app.whenReady().then(showLauncher);
+    else void app.whenReady().then(() => showLauncher());
   });
   app.on("activate", () => {
     if (app.isReady()) showLauncher();
+  });
+  app.on("before-quit", () => {
+    quitting = true;
   });
   app.on("window-all-closed", () => app.quit());
   void app
@@ -461,6 +554,7 @@ else {
       const appearance = createAppearanceSettings(database);
       windowState = createWindowStateSettings(database);
       accounts = createAccountStore(database);
+      refreshAccountsMenu();
       const windowKind = (id: number) => windows.get(id)?.kind;
       const pluginDocuments = createPluginDocuments(database);
       handle("plugin.doc.read", (ref) => pluginDocuments.read(ref), windowKind);
@@ -607,19 +701,7 @@ else {
       handle(
         "accounts.play",
         ({ ids }) => {
-          readiness.assertPlayable();
-          const stored = accounts.list().filter((entry) => !entry.archived);
-          const playable = new Set(stored.map((entry) => entry.id));
-          for (const step of gameWindows.play(ids, playable)) {
-            const existing = gameByAccount.get(step.accountId);
-            if (step.do === "show" && existing && !existing.isDestroyed()) {
-              reveal(existing);
-              continue;
-            }
-            const entry = stored.find((candidate) => candidate.id === step.accountId);
-            if (entry) reveal(createWindow("game", { id: entry.id, name: entry.name }));
-          }
-          broadcastAccounts();
+          playAccounts(ids);
           return undefined;
         },
         windowKind,

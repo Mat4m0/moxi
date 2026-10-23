@@ -470,3 +470,18 @@ test("an archived account is deleted from the archived list after the confirmati
   await click("Delete account");
   expect(data.state.value.profiles.map((profile) => profile.id)).not.toContain("third");
 });
+
+test("the launcher opens Accounts when Main asks for it", async () => {
+  // The Accounts menu falls back to this when it cannot open an account (for example the game
+  // files are not ready), and the player must land on the page that explains it.
+  const data = fixtureData();
+  let navigate: (destination: "accounts") => void = () => undefined;
+  data.onNavigate = (listener) => {
+    navigate = listener;
+  };
+  await mount(data);
+  expect(document.querySelector(".accounts-page")).toBeNull();
+  navigate("accounts");
+  await settle();
+  expect(document.querySelector(".accounts-page")).not.toBeNull();
+});

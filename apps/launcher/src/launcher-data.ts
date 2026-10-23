@@ -60,6 +60,8 @@ export interface LauncherState {
   shortcuts: { hub: string | null };
 }
 export interface LauncherData {
+  /** Main asks the launcher to open a page, for example Accounts from the Accounts menu. */
+  onNavigate(listener: (destination: "accounts") => void): void;
   state: ShallowRef<LauncherState>;
   initialize(): Promise<void>;
   play(ids: readonly string[]): Promise<void>;
@@ -235,6 +237,7 @@ export function fixtureData(search = ""): LauncherData {
   }
   return {
     state,
+    onNavigate() {},
     async initialize() {},
     async play(ids) {
       profiles((profile) =>
@@ -420,6 +423,9 @@ export function bridgeData(): LauncherData {
     window.moxi.invoke("accounts.list", undefined).then(applyAccounts, () => undefined);
   return {
     ...data,
+    onNavigate(listener) {
+      window.moxi.onNavigate(listener);
+    },
     async initialize() {
       window.moxi.onAccountsChanged(applyAccounts);
       applyAccounts(await window.moxi.invoke("accounts.list", undefined));

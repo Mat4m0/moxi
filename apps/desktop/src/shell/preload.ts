@@ -7,6 +7,7 @@ import type {
   Readiness,
   Account,
   DocumentChange,
+  LauncherDestination,
 } from "@moxi/contracts";
 export function exposeBridge(kind: WindowKind) {
   contextBridge.exposeInMainWorld("moxi", {
@@ -21,6 +22,12 @@ export function exposeBridge(kind: WindowKind) {
             const receive = (_event: IpcRendererEvent, accounts: Account[]) => listener(accounts);
             ipcRenderer.on("accounts.changed", receive);
             return () => ipcRenderer.removeListener("accounts.changed", receive);
+          },
+          onNavigate(listener: (destination: LauncherDestination) => void) {
+            const receive = (_event: IpcRendererEvent, destination: LauncherDestination) =>
+              listener(destination);
+            ipcRenderer.on("launcher.navigate", receive);
+            return () => ipcRenderer.removeListener("launcher.navigate", receive);
           },
         }
       : {}),

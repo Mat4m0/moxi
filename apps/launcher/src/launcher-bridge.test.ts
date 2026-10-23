@@ -27,6 +27,7 @@ function connect(initial: Account[]) {
     moxi: {
       invoke,
       onReadinessChanged: () => () => undefined,
+      onNavigate: () => () => undefined,
       onAccountsChanged: (listener: (accounts: Account[]) => void) => {
         changed = listener;
         return () => undefined;

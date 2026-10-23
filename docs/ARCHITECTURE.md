@@ -107,6 +107,12 @@ other Main code is plain Node, so Vitest runs it without Electron.
   account's game window runs in its own browser partition, `persist:account-<id>`, so two
   accounts share no cookies or saved game files. Deleting an archived account also deletes its
   partition, its plugin documents and its stored login.
+- Window policy (`apps/desktop/src/window-policy.ts`): after Play the launcher hides and the first
+  account's game window is in front. Closing the launcher while a game is open hides it. Closing
+  the last game window brings it back. Closing it with no game open, or quitting, ends the app.
+  On macOS the Accounts menu lists the accounts that are not archived: an item opens a closed
+  account or shows an open one, and Manage Accounts brings the launcher back at Accounts. The menu
+  is rebuilt only when an account name or state changes.
 - Credentials are stored with `safeStorage`. On Linux, saving is refused when
   the backend is `basic_text`.
 
