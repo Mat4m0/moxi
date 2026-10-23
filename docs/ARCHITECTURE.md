@@ -102,6 +102,11 @@ other Main code is plain Node, so Vitest runs it without Electron.
 - Main saves the launcher and game window placement as settings (normal bounds plus full screen
   or maximized). A first launch opens both maximized; bounds that no display shows any
   more are brought back into view.
+- Accounts are rows `(id, name, icon, color, archived, created_at)`. A first run creates one
+  account. Whether an account is open comes from its game window, never from storage. Each
+  account's game window runs in its own browser partition, `persist:account-<id>`, so two
+  accounts share no cookies or saved game files. Deleting an archived account also deletes its
+  partition, its plugin documents and its stored login.
 - Credentials are stored with `safeStorage`. On Linux, saving is refused when
   the backend is `basic_text`.
 

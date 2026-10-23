@@ -1474,6 +1474,10 @@ figcaption {
 .archive-account-row small {
   color: var(--muted);
 }
+.confirm-delete {
+  display: grid;
+  gap: 14px;
+}
 .archive-button {
   min-height: 42px;
   display: inline-flex;

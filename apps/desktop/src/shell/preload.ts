@@ -5,6 +5,7 @@ import type {
   SocketEvent,
   AppearanceSettings,
   Readiness,
+  Account,
   DocumentChange,
 } from "@moxi/contracts";
 export function exposeBridge(kind: WindowKind) {
@@ -15,6 +16,11 @@ export function exposeBridge(kind: WindowKind) {
             const receive = (_event: IpcRendererEvent, readiness: Readiness) => listener(readiness);
             ipcRenderer.on("client.readiness.changed", receive);
             return () => ipcRenderer.removeListener("client.readiness.changed", receive);
+          },
+          onAccountsChanged(listener: (accounts: Account[]) => void) {
+            const receive = (_event: IpcRendererEvent, accounts: Account[]) => listener(accounts);
+            ipcRenderer.on("accounts.changed", receive);
+            return () => ipcRenderer.removeListener("accounts.changed", receive);
           },
         }
       : {}),

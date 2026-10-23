@@ -1,22 +1,36 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { Archive, X } from "lucide-vue-next";
+import { Archive, Trash2, X } from "lucide-vue-next";
 import type { LauncherData, Profile, ProfileIcon } from "../launcher-data";
 import { profileIcons } from "../profile-icons";
 import BaseModal from "./BaseModal.vue";
 import ColorControl from "./ColorControl.vue";
+import ConfirmDelete from "./ConfirmDelete.vue";
 const props = defineProps<{ data: LauncherData; profile: Profile | null }>();
 const emit = defineEmits<{ close: [] }>();
 const name = ref(props.profile?.name ?? "");
 const icon = ref<ProfileIcon>(props.profile?.appearance.icon ?? "swords");
 const color = ref(props.profile?.appearance.color ?? "#9a6638");
 const error = ref("");
+const confirming = ref(false);
 const canArchive = computed(
   () =>
     props.profile &&
     props.profile.id !== props.data.state.value.profiles.find((profile) => !profile.archived)?.id &&
     ["ready", "failed"].includes(props.profile.state),
 );
+// Main keeps at least one account; a running account must be closed first.
+const canDelete = computed(
+  () =>
+    props.profile &&
+    props.data.state.value.profiles.filter((profile) => !profile.archived).length > 1 &&
+    ["ready", "failed"].includes(props.profile.state),
+);
+function remove() {
+  if (!props.profile) return;
+  props.data.deleteAccount(props.profile.id);
+  emit("close");
+}
 function save() {
   try {
     props.data.saveProfile({
@@ -118,6 +132,14 @@ function save() {
           <Archive />Archive
         </button>
       </div>
+      <div v-if="canDelete && profile" class="archive-account-row">
+        <span
+          ><strong>Delete account</strong
+          ><small>Remove this account and its saved data for good.</small></span
+        ><button type="button" class="danger-button" @click="confirming = true">
+          <Trash2 />Delete
+        </button>
+      </div>
       <div class="form-actions">
         <button type="button" class="secondary" @click="emit('close')">Cancel</button
         ><button class="primary" :disabled="!name.trim()">
@@ -125,5 +147,10 @@ function save() {
         </button>
       </div>
     </form></BaseModal
-  >
+  ><ConfirmDelete
+    v-if="confirming && profile"
+    :name="profile.name"
+    @cancel="confirming = false"
+    @confirm="remove"
+  />
 </template>

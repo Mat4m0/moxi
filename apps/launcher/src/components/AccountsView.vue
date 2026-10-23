@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { Pencil, Plus } from "lucide-vue-next";
 import type { LauncherData, Profile } from "../launcher-data";
 import { profileStatus } from "../launcher-view-model";
 import { profileIcons } from "../profile-icons";
+import ConfirmDelete from "./ConfirmDelete.vue";
 import ProfileAction from "./ProfileAction.vue";
 const props = defineProps<{ data: LauncherData; busy: boolean }>();
 const emit = defineEmits<{ edit: [profile: Profile | null]; play: [id: string] }>();
 const state = props.data.state;
 const active = computed(() => state.value.profiles.filter((profile) => !profile.archived));
+const deleting = ref<Profile | null>(null);
 const failed = computed(() => active.value.filter((profile) => profile.state === "failed").length);
 </script>
 <template>
@@ -92,8 +94,17 @@ const failed = computed(() => active.value.filter((profile) => profile.state ===
       >
         <span>{{ profile.name }}</span
         ><button class="secondary" @click="data.archive(profile.id, false)">Restore</button
-        ><button class="danger-button" @click="data.remove(profile.id)">Delete permanently</button>
+        ><button class="danger-button" @click="deleting = profile">Delete permanently</button>
       </article>
     </details>
   </section>
+  <ConfirmDelete
+    v-if="deleting"
+    :name="deleting.name"
+    @cancel="deleting = null"
+    @confirm="
+      data.deleteAccount(deleting.id);
+      deleting = null;
+    "
+  />
 </template>

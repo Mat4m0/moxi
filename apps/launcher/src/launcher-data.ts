@@ -1,4 +1,5 @@
-import type { Readiness } from "@moxi/contracts";
+import type { Account, Readiness } from "@moxi/contracts";
+import { accountNameProblem } from "@moxi/contracts/account-name";
 import { shallowRef, type ShallowRef } from "vue";
 import type { AppearanceSettings, CustomUiTheme } from "@moxi/ui";
 import { defaultCustomUiTheme } from "@moxi/ui";
@@ -67,6 +68,8 @@ export interface LauncherData {
   saveProfile(profile: Pick<Profile, "id" | "name" | "appearance">): void;
   archive(id: string, archived: boolean): void;
   remove(id: string): void;
+  /** Removes an account that is not the last one, archived or not. */
+  deleteAccount(id: string): void;
   saveSettings(patch: Partial<LauncherSettings>): Promise<void>;
   rotateNews(enabled: boolean): void;
   checkUpdate(): void;
@@ -253,14 +256,8 @@ export function fixtureData(search = ""): LauncherData {
     },
     saveProfile(edit) {
       const name = edit.name.trim();
-      if (
-        !name ||
-        name.length > 48 ||
-        Array.from(name).some(
-          (character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127,
-        )
-      )
-        throw new Error("Enter a name of 1–48 characters without control characters.");
+      const problem = accountNameProblem(name);
+      if (problem) throw new Error(problem);
       if (
         state.value.profiles.some(
           (profile) =>
@@ -297,6 +294,21 @@ export function fixtureData(search = ""): LauncherData {
       state.value = {
         ...state.value,
         profiles: state.value.profiles.filter((profile) => profile.id !== id || !profile.archived),
+      };
+    },
+    deleteAccount(id) {
+      const profile = state.value.profiles.find((candidate) => candidate.id === id);
+      const active = state.value.profiles.filter((candidate) => !candidate.archived);
+      if (!profile || (!profile.archived && (active.length < 2 || profile.state === "running")))
+        return;
+      const remaining = state.value.profiles.filter((candidate) => candidate.id !== id);
+      const selected = state.value.selectedProfileIds.filter((value) => value !== id);
+      state.value = {
+        ...state.value,
+        profiles: remaining,
+        selectedProfileIds: selected.length
+          ? selected
+          : [remaining.find((candidate) => !candidate.archived)!.id],
       };
     },
     async saveSettings(patch) {
@@ -347,10 +359,26 @@ export function fixtureData(search = ""): LauncherData {
   };
 }
 
+const isHexColor = (value: string): value is `#${string}` => /^#[0-9a-fA-F]{6}$/.test(value);
+
+function profileOf(account: Account): Profile {
+  return {
+    id: account.id,
+    name: account.name,
+    archived: account.archived,
+    appearance: account.appearance,
+    state: account.state === "closed" ? "ready" : account.state,
+    ...(account.failure ? { failure: account.failure } : {}),
+  };
+}
+
 export function bridgeData(): LauncherData {
   const data = fixtureData();
   data.state.value = {
     ...data.state.value,
+    // The accounts come from Main; none of the fixture accounts is shown.
+    profiles: [],
+    selectedProfileIds: [],
     readiness: {
       state: "preparing",
       progress: {
@@ -375,9 +403,26 @@ export function bridgeData(): LauncherData {
           : data.state.value.gameFilesInfo,
     };
   }
+  function applyAccounts(accounts: Account[]) {
+    const profiles = accounts.map(profileOf);
+    const open = profiles.filter((profile) => !profile.archived);
+    const kept = data.state.value.selectedProfileIds.filter((id) =>
+      open.some((profile) => profile.id === id),
+    );
+    const first = open[0];
+    data.state.value = {
+      ...data.state.value,
+      profiles,
+      selectedProfileIds: kept.length || !first ? kept : [first.id],
+    };
+  }
+  const refreshAccounts = () =>
+    window.moxi.invoke("accounts.list", undefined).then(applyAccounts, () => undefined);
   return {
     ...data,
     async initialize() {
+      window.moxi.onAccountsChanged(applyAccounts);
+      applyAccounts(await window.moxi.invoke("accounts.list", undefined));
       let changed = false;
       window.moxi.onReadinessChanged((readiness) => {
         changed = true;
@@ -415,8 +460,43 @@ export function bridgeData(): LauncherData {
       if (action === "repair" || action === "reset")
         void window.moxi.invoke("client.retry", undefined);
     },
-    async play() {
-      await window.moxi.invoke("game.open", undefined);
+    async play(ids) {
+      await window.moxi.invoke("accounts.play", { ids: [...ids] });
+    },
+    // The fixture operations update the list at once; Main then confirms or corrects it.
+    saveProfile(edit) {
+      const { color } = edit.appearance;
+      if (!isHexColor(color)) throw new Error("Pick a valid color.");
+      data.saveProfile(edit);
+      void window.moxi
+        .invoke("accounts.save", {
+          id: edit.id,
+          name: edit.name.trim(),
+          appearance: { icon: edit.appearance.icon, color },
+        })
+        .then(applyAccounts, refreshAccounts);
+    },
+    archive(id, archived) {
+      data.archive(id, archived);
+      if (data.state.value.profiles.find((profile) => profile.id === id)?.archived === archived)
+        void window.moxi
+          .invoke("accounts.archive", { id, archived })
+          .then(applyAccounts, refreshAccounts);
+    },
+    remove(id) {
+      data.remove(id);
+      void window.moxi.invoke("accounts.remove", { id }).then(applyAccounts, refreshAccounts);
+    },
+    // Main only deletes an archived account, so an active one is archived first. Main checks
+    // both steps, and a refusal puts the list back as Main has it.
+    deleteAccount(id) {
+      const before = data.state.value.profiles.length;
+      data.deleteAccount(id);
+      if (data.state.value.profiles.length === before) return;
+      void window.moxi
+        .invoke("accounts.archive", { id, archived: true })
+        .then(() => window.moxi.invoke("accounts.remove", { id }))
+        .then(applyAccounts, refreshAccounts);
     },
   };
 }

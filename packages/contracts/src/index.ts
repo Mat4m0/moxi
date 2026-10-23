@@ -117,9 +117,21 @@ export const channels = {
     request: type("undefined"),
     response: type({ generationToken: "string.uuid", snapshotSize: "number.safe > 0" }),
   }),
-  "game.open": defineChannel({ request: type("undefined"), response: type("undefined") }),
+  "accounts.list": defineChannel({ request: type("undefined"), response: accountList }),
+  "accounts.save": defineChannel({ request: accountSave, response: accountList }),
+  "accounts.archive": defineChannel({
+    request: type({ id: accountId, archived: "boolean" }),
+    response: accountList,
+  }),
+  "accounts.remove": defineChannel({ request: type({ id: accountId }), response: accountList }),
+  "accounts.play": defineChannel({
+    request: type({ ids: accountId.array().atLeastLength(1).atMostLength(16) }),
+    response: type("undefined"),
+  }),
 };
 import { windowChannels, type WindowKind } from "./windows.js";
+import { accountId, accountList, accountSave, type Account } from "./accounts.js";
+export { accountAppearance, accountId, type Account, type AccountSave } from "./accounts.js";
 export { hubPortMessage, windowChannels, type WindowKind } from "./windows.js";
 export type ChannelName = keyof typeof channels;
 export type RequestOf<N extends ChannelName> = (typeof channels)[N]["request"]["infer"];
@@ -135,7 +147,10 @@ export type Bridge<K extends WindowKind> = {
       onAppearanceChanged(listener: (settings: AppearanceSettings) => void): () => void;
     }
   : K extends "launcher"
-    ? { onReadinessChanged(listener: (readiness: Readiness) => void): () => void }
+    ? {
+        onReadinessChanged(listener: (readiness: Readiness) => void): () => void;
+        onAccountsChanged(listener: (accounts: Account[]) => void): () => void;
+      }
     : K extends "pluginHost"
       ? {
           onDocumentChanged(

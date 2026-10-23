@@ -18,14 +18,15 @@ import { resolveFolders } from "../folders.js";
 import { createGameWeb } from "../game-web/index.js";
 import { resolveRendererPath } from "../protocol-path.js";
 import { hubPortMessage } from "@moxi/contracts/windows";
-import type { WindowKind } from "@moxi/contracts";
+import type { Account, WindowKind } from "@moxi/contracts";
 import { handle } from "./ipc.js";
 import { createGameNetwork } from "../game-network/index.js";
 import { createClientCache } from "../game-files/client.ts";
 import { createClientReadiness } from "../client-readiness.ts";
 import { createClientRoutes } from "./client.js";
 
-import { openDatabase, migrations } from "../storage/index.js";
+import { openDatabase, migrations, createAccountStore } from "../storage/index.js";
+import { createGameWindows } from "../game-windows.js";
 import { createPluginDocuments } from "../plugin-documents.ts";
 import { loadPluginBundles } from "../plugin-bundles.ts";
 import { pluginCsp } from "../plugin-isolation.ts";
@@ -82,8 +83,14 @@ const sessions = new Map<
   { client: ReturnType<typeof createClientRoutes>; token: string }
 >();
 let windowState: ReturnType<typeof createWindowStateSettings> | undefined;
+let accounts: ReturnType<typeof createAccountStore>;
+const gameWindows = createGameWindows();
+// One game window per account, each in its own browser partition.
+const gameByAccount = new Map<string, BrowserWindow>();
+const accountOfWindow = new Map<number, string>();
+const accountRoutes = new Map<string, ReturnType<typeof createClientRoutes>>();
+const preparedPartitions = new Set<string>();
 let launcher: BrowserWindow | undefined;
-let game: BrowserWindow | undefined;
 let pluginHost: BrowserWindow;
 let pluginHostReady: Promise<void>;
 const patchRoot = !app.isPackaged ? process.env.MOXI_PATCH_ROOT : undefined;
@@ -105,7 +112,6 @@ const patchFetch: typeof fetch = patchRoot
     }
   : fetch;
 const cacheClient = createClientCache(folders.gameCache, patchFetch);
-let client = createClientRoutes(folders.gameCache, patchFetch, cacheClient);
 const readiness = createClientReadiness({
   prepare: cacheClient.prepare,
   observe: (progress) =>
@@ -172,22 +178,64 @@ function rememberWindowState(win: BrowserWindow, kind: SavedWindowKind) {
   win.on("close", save);
   win.on("closed", () => clearTimeout(timer));
 }
-function createWindow(kind: WindowKind) {
-  if (kind === "game") client = createClientRoutes(folders.gameCache, patchFetch, cacheClient);
+const partitionOf = (accountId: string) => `persist:account-${accountId}`;
+let appHandlerFor: (accountId: string) => (request: Request) => Promise<Response>;
+// A game session is its own browser profile, so two accounts never share cookies or saved files.
+function prepareAccountSession(accountId: string) {
+  const partition = partitionOf(accountId);
+  if (preparedPartitions.has(partition)) return;
+  preparedPartitions.add(partition);
+  const accountSession = session.fromPartition(partition);
+  const gamePermission = (contents: Electron.WebContents | null, permission: string) =>
+    contents !== null &&
+    windows.get(contents.id)?.kind === "game" &&
+    (permission === "pointerLock" || permission === "fullscreen");
+  accountSession.setPermissionRequestHandler((contents, permission, callback) =>
+    callback(gamePermission(contents, permission)),
+  );
+  accountSession.setPermissionCheckHandler((contents, permission) =>
+    gamePermission(contents, permission),
+  );
+  accountSession.protocol.handle("moxi", appHandlerFor(accountId));
+}
+function currentAccounts(): Account[] {
+  return accounts.list().map((stored) => ({ ...stored, ...gameWindows.state(stored.id) }));
+}
+function broadcastAccounts() {
+  const list = currentAccounts();
+  for (const { kind, window } of windows.values())
+    if (kind === "launcher" && !window.isDestroyed())
+      window.webContents.send("accounts.changed", list);
+}
+function createWindow(kind: WindowKind, account?: { id: string; name: string }) {
+  const routes =
+    kind === "game" ? createClientRoutes(folders.gameCache, patchFetch, cacheClient) : undefined;
+  if (account && routes) {
+    accountRoutes.set(account.id, routes);
+    prepareAccountSession(account.id);
+  }
   // Agents and tests run without remembered placement or full screen.
   const remembered = kind !== "pluginHost" && !background ? kind : undefined;
   const plan = remembered
     ? planWindow(remembered, windowState?.get(remembered) ?? null, workAreas())
     : undefined;
+  // A second game window opens a little below and right of the last one, so they do not stack.
+  const lastGame = [...gameByAccount.values()].filter((other) => !other.isDestroyed()).at(-1);
+  const cascade =
+    kind === "game" && lastGame && !plan?.maximized && !plan?.fullscreen
+      ? { x: lastGame.getBounds().x + 30, y: lastGame.getBounds().y + 30 }
+      : {};
   const win = new BrowserWindow({
     ...(plan?.bounds ?? { width: 960, height: 640 }),
+    ...cascade,
     minWidth: 640,
     minHeight: 480,
     // Hidden until `reveal`, so a maximized window opens at full size instead of growing.
     show: false,
-    title: identity.productName,
+    title: account ? `${identity.productName} – ${account.name}` : identity.productName,
     webPreferences: {
       ...(kind === "pluginHost" ? { partition: "persist:plugins" } : {}),
+      ...(account ? { partition: partitionOf(account.id) } : {}),
       preload: join(import.meta.dirname, `${kind}.cjs`),
       sandbox: true,
       contextIsolation: true,
@@ -231,13 +279,18 @@ function createWindow(kind: WindowKind) {
   }
   windows.set(win.webContents.id, { kind, window: win });
   const id = win.webContents.id;
-  if (kind === "game") {
+  let crashedWindow = false;
+  if (kind === "game" && account && routes) {
+    accountOfWindow.set(id, account.id);
+    gameByAccount.set(account.id, win);
+    gameWindows.opened(account.id);
     // Record a failed client update before the window goes away; closing always wins.
     let closing = false;
     const end = (crashed: boolean) => {
       if (closing) return;
       closing = true;
-      void (sessions.get(id)?.client ?? client)
+      crashedWindow = crashed;
+      void (sessions.get(id)?.client ?? routes)
         .end(crashed)
         .then((failed) => (failed ? readiness.retry() : undefined))
         .catch((error: unknown) => console.warn("[moxi] Failed client was not recorded", error))
@@ -255,6 +308,13 @@ function createWindow(kind: WindowKind) {
     network.closeWindow(id);
     sessions.delete(id);
     windows.delete(id);
+    const accountId = accountOfWindow.get(id);
+    accountOfWindow.delete(id);
+    if (accountId !== undefined) {
+      if (gameByAccount.get(accountId) === win) gameByAccount.delete(accountId);
+      gameWindows.ended(accountId, crashedWindow);
+      broadcastAccounts();
+    }
     if (![...windows.values()].some((entry) => entry.kind !== "pluginHost")) app.quit();
   });
   win.webContents.on("will-navigate", (event) => event.preventDefault());
@@ -307,64 +367,63 @@ else {
     .whenReady()
     .then(() => {
       prepareKeyboard();
-      session.defaultSession.setPermissionRequestHandler((contents, permission, callback) =>
-        callback(
-          windows.get(contents.id)?.kind === "game" &&
-            (permission === "pointerLock" || permission === "fullscreen"),
-        ),
+      session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) =>
+        callback(false),
       );
-      session.defaultSession.setPermissionCheckHandler(
-        (contents, permission) =>
-          contents !== null &&
-          windows.get(contents.id)?.kind === "game" &&
-          (permission === "pointerLock" || permission === "fullscreen"),
-      );
+      session.defaultSession.setPermissionCheckHandler(() => false);
       const gameWeb = createGameWeb((url, init) => net.fetch(url, init));
-      protocol.handle("moxi", async (request) => {
-        const clientResponse = await client.handle(request);
-        if (clientResponse) {
-          clientResponse.headers.set("Content-Security-Policy", csp);
-          return clientResponse;
-        }
-        const webResponse = await gameWeb.handle(request);
-        if (webResponse) {
-          webResponse.headers.set("Content-Security-Policy", csp);
-          return webResponse;
-        }
-        const url = new URL(request.url);
-        if (
-          request.method === "GET" &&
-          url.host === "app" &&
-          !app.isPackaged &&
-          process.env.MOXI_GAME_URL &&
-          ["/game/", "/src/", "/@vite/", "/@fs/", "/@id/", "/node_modules/"].some((prefix) =>
-            url.pathname.startsWith(prefix),
-          )
-        ) {
-          const path = url.pathname.startsWith("/game/")
-            ? url.pathname.slice("/game".length)
-            : url.pathname;
-          const upstream = new URL(path + url.search, process.env.MOXI_GAME_URL);
-          return net.fetch(upstream.href);
-        }
-        const file = resolveRendererPath(request.url, roots);
-        if (!file || request.method !== "GET")
-          return new Response("Not found", {
-            status: 404,
-            headers: { "Content-Security-Policy": csp },
-          });
-        try {
-          const response = await net.fetch(pathToFileURL(file).href);
-          const headers = new Headers(response.headers);
-          headers.set("Content-Security-Policy", csp);
-          return new Response(response.body, { status: response.status, headers });
-        } catch {
-          return new Response("Not found", {
-            status: 404,
-            headers: { "Content-Security-Policy": csp },
-          });
-        }
-      });
+      const appHandler =
+        (routes: () => ReturnType<typeof createClientRoutes> | undefined) =>
+        async (request: Request): Promise<Response> => {
+          const clientResponse = await routes()?.handle(request);
+          if (clientResponse) {
+            clientResponse.headers.set("Content-Security-Policy", csp);
+            return clientResponse;
+          }
+          const webResponse = await gameWeb.handle(request);
+          if (webResponse) {
+            webResponse.headers.set("Content-Security-Policy", csp);
+            return webResponse;
+          }
+          const url = new URL(request.url);
+          if (
+            request.method === "GET" &&
+            url.host === "app" &&
+            !app.isPackaged &&
+            process.env.MOXI_GAME_URL &&
+            ["/game/", "/src/", "/@vite/", "/@fs/", "/@id/", "/node_modules/"].some((prefix) =>
+              url.pathname.startsWith(prefix),
+            )
+          ) {
+            const path = url.pathname.startsWith("/game/")
+              ? url.pathname.slice("/game".length)
+              : url.pathname;
+            const upstream = new URL(path + url.search, process.env.MOXI_GAME_URL);
+            return net.fetch(upstream.href);
+          }
+          const file = resolveRendererPath(request.url, roots);
+          if (!file || request.method !== "GET")
+            return new Response("Not found", {
+              status: 404,
+              headers: { "Content-Security-Policy": csp },
+            });
+          try {
+            const response = await net.fetch(pathToFileURL(file).href);
+            const headers = new Headers(response.headers);
+            headers.set("Content-Security-Policy", csp);
+            return new Response(response.body, { status: response.status, headers });
+          } catch {
+            return new Response("Not found", {
+              status: 404,
+              headers: { "Content-Security-Policy": csp },
+            });
+          }
+        };
+      protocol.handle(
+        "moxi",
+        appHandler(() => undefined),
+      );
+      appHandlerFor = (accountId) => appHandler(() => accountRoutes.get(accountId));
       const pluginSession = session.fromPartition("persist:plugins");
       pluginSession.setPermissionRequestHandler((_contents, _permission, callback) =>
         callback(false),
@@ -401,6 +460,7 @@ else {
       app.once("will-quit", () => database.close());
       const appearance = createAppearanceSettings(database);
       windowState = createWindowStateSettings(database);
+      accounts = createAccountStore(database);
       const windowKind = (id: number) => windows.get(id)?.kind;
       const pluginDocuments = createPluginDocuments(database);
       handle("plugin.doc.read", (ref) => pluginDocuments.read(ref), windowKind);
@@ -427,7 +487,8 @@ else {
       handle(
         "game.client",
         async (_request, owner) => {
-          const routes = client;
+          const routes = accountRoutes.get(accountOfWindow.get(owner) ?? "");
+          if (!routes) throw new Error("This window has no account.");
           const info = await routes.info();
           if (windows.has(owner))
             sessions.set(owner, { client: routes, token: info.generationToken });
@@ -508,12 +569,57 @@ else {
         windowKind,
       );
       void readiness.retry();
+      handle("accounts.list", () => currentAccounts(), windowKind);
       handle(
-        "game.open",
-        () => {
+        "accounts.save",
+        (input) => {
+          accounts.save(input);
+          broadcastAccounts();
+          return currentAccounts();
+        },
+        windowKind,
+      );
+      handle(
+        "accounts.archive",
+        ({ id, archived }) => {
+          if (gameWindows.running(id)) throw new Error("Close the account's game window first.");
+          accounts.archive(id, archived);
+          broadcastAccounts();
+          return currentAccounts();
+        },
+        windowKind,
+      );
+      handle(
+        "accounts.remove",
+        async ({ id }) => {
+          if (gameWindows.running(id)) throw new Error("Close the account's game window first.");
+          accounts.remove(id);
+          gameWindows.forget(id);
+          accountRoutes.delete(id);
+          const accountSession = session.fromPartition(partitionOf(id));
+          await accountSession.clearStorageData();
+          await accountSession.clearCache();
+          broadcastAccounts();
+          return currentAccounts();
+        },
+        windowKind,
+      );
+      handle(
+        "accounts.play",
+        ({ ids }) => {
           readiness.assertPlayable();
-          if (!game || game.isDestroyed()) game = createWindow("game");
-          reveal(game);
+          const stored = accounts.list().filter((entry) => !entry.archived);
+          const playable = new Set(stored.map((entry) => entry.id));
+          for (const step of gameWindows.play(ids, playable)) {
+            const existing = gameByAccount.get(step.accountId);
+            if (step.do === "show" && existing && !existing.isDestroyed()) {
+              reveal(existing);
+              continue;
+            }
+            const entry = stored.find((candidate) => candidate.id === step.accountId);
+            if (entry) reveal(createWindow("game", { id: entry.id, name: entry.name }));
+          }
+          broadcastAccounts();
           return undefined;
         },
         windowKind,

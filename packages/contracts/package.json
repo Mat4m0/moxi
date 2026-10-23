@@ -5,7 +5,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./windows": "./src/windows.ts",
-    "./web": "./src/web.ts"
+    "./web": "./src/web.ts",
+    "./account-name": "./src/account-name.ts"
   },
   "dependencies": {
     "arktype": "2.2.7"

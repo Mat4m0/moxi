@@ -7,7 +7,11 @@ export const windowChannels = {
     "appearance.get",
     "appearance.set",
     "app.info",
-    "game.open",
+    "accounts.list",
+    "accounts.save",
+    "accounts.archive",
+    "accounts.remove",
+    "accounts.play",
   ],
   game: [
     "appearance.get",

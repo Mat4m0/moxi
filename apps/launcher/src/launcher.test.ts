@@ -433,3 +433,40 @@ test("does not let Play launch while client artifacts are preparing", async () =
   await click("Choose accounts, Main account");
   expect(button("Play Main account").disabled).toBe(true);
 });
+
+test("deleting an account removes it only after the confirmation", async () => {
+  const data = await mount();
+  await click("Accounts");
+  await click("Edit Main account");
+  await click("Delete");
+  expect(document.querySelector("#account-delete-title")?.textContent).toBe("Delete Main account?");
+
+  // The editor has its own Cancel; this one belongs to the confirmation.
+  document.querySelector<HTMLButtonElement>(".confirm-delete .secondary")?.click();
+  await settle();
+  expect(data.state.value.profiles.map((profile) => profile.name)).toContain("Main account");
+
+  await click("Delete");
+  await click("Delete account");
+  expect(data.state.value.profiles.map((profile) => profile.name)).toEqual(["Storage account"]);
+  expect(data.state.value.selectedProfileIds).toEqual(["storage"]);
+});
+
+test("an account that is open cannot be deleted", () => {
+  const data = fixtureData();
+  data.deleteAccount("storage");
+  expect(data.state.value.profiles.map((profile) => profile.id)).toEqual(["main", "storage"]);
+});
+
+test("an archived account is deleted from the archived list after the confirmation", async () => {
+  const data = fixtureData();
+  data.saveProfile({ id: "third", name: "Third", appearance: { icon: "star", color: "#9a6638" } });
+  data.archive("third", true);
+  await mount(data);
+  await click("Accounts");
+  document.querySelector("details.archived-accounts")?.setAttribute("open", "");
+  await click("Delete permanently");
+  expect(data.state.value.profiles.map((profile) => profile.id)).toContain("third");
+  await click("Delete account");
+  expect(data.state.value.profiles.map((profile) => profile.id)).not.toContain("third");
+});

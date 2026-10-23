@@ -55,7 +55,27 @@ const denied: [ChannelName, WindowKind | undefined, unknown][] = [
   ["game.net.write", "game", { id: 1, bytes: [1, 2, 3] }],
   ["game.net.ack", "game", { id: 1, bytes: 0 }],
   ["game.net.connect", "game", { id: -1, destination: "8.8.8.8:6112" }],
-  ["game.open", "game", undefined],
+  ["accounts.play", "game", { ids: ["main"] }],
+  ["accounts.list", "game", undefined],
+  ["accounts.remove", "pluginHost", { id: "main" }],
+  ["accounts.play", "launcher", { ids: [] }],
+  ["accounts.play", "launcher", { ids: ["../escape"] }],
+  ["accounts.archive", "launcher", { id: "main" }],
+  [
+    "accounts.save",
+    "launcher",
+    { id: "a/b", name: "Alice", appearance: { icon: "swords", color: "#9a6638" } },
+  ],
+  [
+    "accounts.save",
+    "launcher",
+    { id: "alice", name: "Alice", appearance: { icon: "skull", color: "#9a6638" } },
+  ],
+  [
+    "accounts.save",
+    "launcher",
+    { id: "alice", name: "Alice", appearance: { icon: "swords", color: "red" } },
+  ],
   ["appearance.set", "game", { uiStyle: "obsidian", uiPanelOpacity: 94, uiFont: "guild-wars" }],
   ["appearance.set", "launcher", { uiStyle: "classic", uiPanelOpacity: 39, uiFont: "guild-wars" }],
   [
@@ -67,7 +87,7 @@ const denied: [ChannelName, WindowKind | undefined, unknown][] = [
   ["game.client", "launcher", undefined],
   ["game.client", "pluginHost", undefined],
   ["game.client", "game", {}],
-  ["game.open", undefined, undefined],
+  ["accounts.play", undefined, { ids: ["main"] }],
   ["app.info", "launcher", {}],
 ];
 test.each(denied)(
@@ -80,7 +100,7 @@ test.each([
   ["download.pause", "launcher"],
   ["download.resume", "launcher"],
   ["app.info", "launcher"],
-  ["game.open", "launcher"],
+  ["accounts.list", "launcher"],
   ["app.info", "game"],
   ["game.client", "game"],
 ] as const)("allows the window's declared actions (%s, %s)", (name, kind) => {
@@ -91,4 +111,12 @@ test("accepts copied TCP bytes from the game window", () => {
   expect(
     validateRequest("game.net.write", "game", { id: 1, bytes: new Uint8Array([1, 2, 3]) }),
   ).toEqual({ id: 1, bytes: new Uint8Array([1, 2, 3]) });
+});
+
+test("accepts a new account and a play request from the launcher", () => {
+  const account = { id: "alice-2", name: "Alice", appearance: { icon: "star", color: "#496b58" } };
+  expect(validateRequest("accounts.save", "launcher", account)).toEqual(account);
+  expect(validateRequest("accounts.play", "launcher", { ids: ["alice-2", "main"] })).toEqual({
+    ids: ["alice-2", "main"],
+  });
 });
