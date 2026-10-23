@@ -14,6 +14,7 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { resolveIdentity } from "../identity.js";
 import { resolveFolders } from "../folders.js";
+import { createGameWeb } from "../game-web/index.js";
 import { resolveRendererPath } from "../protocol-path.js";
 import { hubPortMessage } from "@moxi/contracts/windows";
 import type { WindowKind } from "@moxi/contracts";
@@ -166,6 +167,12 @@ function createWindow(kind: WindowKind) {
       });
     });
   }
+  // Dev only: the client's own messages explain a failed connect or login.
+  if (kind === "game" && !app.isPackaged)
+    win.webContents.on("console-message", ({ message, level }) => {
+      if (message.startsWith("[client]") || level === "warning" || level === "error")
+        console.info(message);
+    });
   if (background) {
     win.setOpacity(0);
     win.setIgnoreMouseEvents(true);
@@ -260,11 +267,17 @@ else {
           windows.get(contents.id)?.kind === "game" &&
           (permission === "pointerLock" || permission === "fullscreen"),
       );
+      const gameWeb = createGameWeb((url, init) => net.fetch(url, init));
       protocol.handle("moxi", async (request) => {
         const clientResponse = await client.handle(request);
         if (clientResponse) {
           clientResponse.headers.set("Content-Security-Policy", csp);
           return clientResponse;
+        }
+        const webResponse = await gameWeb.handle(request);
+        if (webResponse) {
+          webResponse.headers.set("Content-Security-Policy", csp);
+          return webResponse;
         }
         const url = new URL(request.url);
         if (

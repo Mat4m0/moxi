@@ -4,6 +4,7 @@ import { createRuntime } from "@moxi/gwkit";
 import { mountGameFilesystem } from "./filesystem";
 import { createSocketHost } from "./socket-host";
 import { createImage } from "./image";
+import { installWebRewrite } from "./web";
 import { installGameInput, type OskInput } from "./input";
 
 type GameModule = {
@@ -27,6 +28,16 @@ type GameModule = {
   oskIsActive?: boolean;
   getPatchMode(): Promise<string>;
   handleFatalReadError(): void;
+  secureStorage: {
+    getCredentials(): Promise<never>;
+    storeCredentials(): Promise<void>;
+    clearCredentials(): Promise<void>;
+  };
+  login: { hasProvider(name: unknown): boolean; getAuthToken(): Promise<never> };
+  nativeAccount: { storeAccountData(): Promise<void>; clearAccountData(): Promise<void> };
+  setBuildInfo(info: { programId: unknown; buildId: unknown }): void;
+  isMobile: boolean;
+  requestFullScreen(): void;
   setStartupProgress(stage: unknown): void;
   addRunDependency(name: string): void;
   removeRunDependency(name: string): void;
@@ -118,6 +129,24 @@ async function boot() {
     async getPatchMode() {
       return "onDemand";
     },
+    // The glue's missing-method branches call their fallback without returning, so all of these
+    // must exist. Moxi saves no credentials yet (the player types them) and offers no Steam login.
+    secureStorage: {
+      getCredentials: () => Promise.reject(new Error("No stored credentials.")),
+      storeCredentials: async () => {},
+      clearCredentials: async () => {},
+    },
+    login: {
+      hasProvider: () => false,
+      getAuthToken: () => Promise.reject(new Error("No login provider is offered.")),
+    },
+    nativeAccount: { storeAccountData: async () => {}, clearAccountData: async () => {} },
+    setBuildInfo: (info) =>
+      console.info(
+        `[client] build program=${Number(info.programId)} build=${Number(info.buildId)}`,
+      ),
+    isMobile: false,
+    requestFullScreen: () => void canvas.requestFullscreen?.(),
     handleFatalReadError() {
       fail("The game files could not be read. Run fetch-client and restart Moxi.");
     },
@@ -133,6 +162,7 @@ async function boot() {
       throw new Error("The game runtime is not initialized.");
     },
   };
+  installWebRewrite();
   frameLog = setInterval(() => console.info(`[gwkit] frames=${game.frames()}`), 1000);
   const glue = document.createElement("script");
   glue.src = "moxi://app/client/Gw.jspi.js";

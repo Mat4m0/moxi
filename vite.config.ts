@@ -40,6 +40,7 @@ function imports(allowed: string[], otherPackages: string[], sdkTypesOnly = fals
 const desktopImports = [
   "@moxi/contracts",
   "@moxi/contracts/windows",
+  "@moxi/contracts/web",
   "@moxi/gwkit",
   "arktype",
   "node:*",
@@ -87,6 +88,7 @@ export default defineConfig({
           [
             "vue",
             "@moxi/contracts",
+            "@moxi/contracts/web",
             "@moxi/ui",
             "@moxi/ui/*",
             "@moxi/gwkit",

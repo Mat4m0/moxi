@@ -142,6 +142,10 @@ ArenaNet manifest → bounded parse → executable artifacts (hash-verified)
 - The game renderer owns the Emscripten `Module`. It loads the official glue
   and module from `moxi://app`, mounts IDBFS for templates and screenshots,
   and forwards TCP and DNS to Main.
+- The client's own web calls (login, account) reach ArenaNet only through one stateless Main proxy
+  at `moxi://app/<route>/...`. The routes are a closed list of five hosts (`@moxi/contracts/web`);
+  no cookies cross it in either direction and redirects may not leave the host. The game page
+  points the client's requests at it.
 - Every memory address or struct offset used by `game` comes from a locator
   value, which comes from an operand of a located function (the witness rule).
   If ArenaNet changes a struct, its reader stops matching and only that fact
