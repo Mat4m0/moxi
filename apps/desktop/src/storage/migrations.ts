@@ -24,4 +24,13 @@ export const migrations: readonly Migration[] = [
         ) STRICT;
     `,
   },
+  {
+    version: 3,
+    sql: `
+        ALTER TABLE accounts DROP COLUMN icon;
+        ALTER TABLE accounts DROP COLUMN color;
+        DELETE FROM settings WHERE key = 'uiCustomTheme';
+        DELETE FROM settings WHERE key = 'uiStyle' AND json = '"custom"';
+    `,
+  },
 ];

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   AccountError,
+  createAccountSelection,
   createAccountStore,
   createCredentialStore,
   migrations,
@@ -26,14 +27,13 @@ function setup() {
     databases.push(db);
     return db;
   };
-  return { open };
+  return { open, directory };
 }
 afterEach(() => {
   for (const db of databases.splice(0)) if (db.isOpen) db.close();
   for (const directory of directories.splice(0))
     rmSync(directory, { recursive: true, force: true });
 });
-const look = { icon: "star", color: "#496b58" } as const;
 
 test("a first run has one account to play, and reopening does not add another", () => {
   const fixture = setup();
@@ -52,11 +52,11 @@ test("a first run has one account to play, and reopening does not add another", 
 
 test("accounts keep the order they were added in, and a rename keeps the place", () => {
   const store = createAccountStore(setup().open());
-  store.save({ id: "storage", name: "Storage", appearance: look });
-  store.save({ id: "heroes", name: "Heroes", appearance: look });
+  store.save({ id: "storage", name: "Storage" });
+  store.save({ id: "heroes", name: "Heroes" });
   const [main] = store.list();
   if (!main) throw new Error("Expected the first account.");
-  store.save({ id: main.id, name: "Mule", appearance: look });
+  store.save({ id: main.id, name: "Mule" });
   expect(store.list().map(({ name }) => name)).toEqual(["Mule", "Storage", "Heroes"]);
 });
 
@@ -69,22 +69,17 @@ test.each([
   ["  STORAGE ", "Another account already uses this name."],
 ])("refuses the name %j", (name, message) => {
   const store = createAccountStore(setup().open());
-  store.save({ id: "storage", name: "Storage", appearance: look });
-  expect(() => store.save({ id: "other", name, appearance: look })).toThrow(AccountError);
-  expect(() => store.save({ id: "other", name, appearance: look })).toThrow(message);
+  store.save({ id: "storage", name: "Storage" });
+  expect(() => store.save({ id: "other", name })).toThrow(AccountError);
+  expect(() => store.save({ id: "other", name })).toThrow(message);
   expect(store.list()).toHaveLength(2);
 });
 
 test("saving an account again with its own name is not a duplicate, and the name is trimmed", () => {
   const store = createAccountStore(setup().open());
-  store.save({ id: "storage", name: "  Storage ", appearance: look });
-  store.save({ id: "storage", name: "Storage", appearance: { ...look, icon: "crown" } });
-  expect(store.list().at(-1)).toEqual({
-    id: "storage",
-    name: "Storage",
-    archived: false,
-    appearance: { icon: "crown", color: "#496b58" },
-  });
+  store.save({ id: "storage", name: "  Storage " });
+  store.save({ id: "storage", name: "Storage" });
+  expect(store.list().at(-1)).toEqual({ id: "storage", name: "Storage", archived: false });
 });
 
 test("the last account in use cannot be archived, and an archived one can be restored", () => {
@@ -92,7 +87,7 @@ test("the last account in use cannot be archived, and an archived one can be res
   const [main] = store.list();
   if (!main) throw new Error("Expected the first account.");
   expect(() => store.archive(main.id, true)).toThrow("Keep at least one account");
-  store.save({ id: "storage", name: "Storage", appearance: look });
+  store.save({ id: "storage", name: "Storage" });
   store.archive("storage", true);
   expect(store.list().map(({ archived }) => archived)).toEqual([false, true]);
   store.archive("storage", false);
@@ -102,8 +97,8 @@ test("the last account in use cannot be archived, and an archived one can be res
 test("only an archived account can be deleted, and its own data goes with it", () => {
   const db = setup().open();
   const store = createAccountStore(db);
-  store.save({ id: "storage", name: "Storage", appearance: look });
-  store.save({ id: "heroes", name: "Heroes", appearance: look });
+  store.save({ id: "storage", name: "Storage" });
+  store.save({ id: "heroes", name: "Heroes" });
   const credentials = createCredentialStore({
     isEncryptionAvailable: () => true,
     encrypt: (text) => Buffer.from(text),
@@ -127,4 +122,78 @@ test("only an archived account can be deleted, and its own data goes with it", (
   expect(store.list().map(({ id }) => id)).not.toContain("storage");
   expect(db.prepare("SELECT account FROM documents").all()).toEqual([{ account: "heroes" }]);
   expect(db.prepare("SELECT account FROM credentials").all()).toEqual([{ account: "heroes" }]);
+});
+
+test("a database made before accounts lost their look still opens, with its accounts and appearance", () => {
+  const fixture = setup();
+  const old = openDatabase({
+    file: join(fixture.directory, "moxi.sqlite"),
+    backupDir: join(fixture.directory, "backups"),
+    appVersion: "0.1.0",
+    migrations: migrations.slice(0, 2),
+  });
+  databases.push(old);
+  old
+    .prepare(
+      "INSERT INTO accounts (id, name, icon, color, archived, created_at) VALUES ('old', 'Old', 'star', '#496b58', 0, 1)",
+    )
+    .run();
+  old
+    .prepare(
+      "INSERT INTO settings (key, json) VALUES ('uiStyle', '\"custom\"'), ('uiCustomTheme', '{}')",
+    )
+    .run();
+  old.close();
+
+  const db = fixture.open();
+  expect(createAccountStore(db).list()).toEqual([{ id: "old", name: "Old", archived: false }]);
+  expect(db.prepare("SELECT key FROM settings").all()).toEqual([]);
+});
+
+test("the marked accounts survive a restart", () => {
+  const fixture = setup();
+  const first = fixture.open();
+  const store = createAccountStore(first);
+  store.save({ id: "second", name: "Second" });
+  createAccountSelection(first).set(["second"], store.list());
+  first.close();
+  const reopened = fixture.open();
+  expect([...createAccountSelection(reopened).ids(createAccountStore(reopened).list())]).toEqual([
+    "second",
+  ]);
+});
+
+test("an account that is archived or deleted loses its mark, and restoring it does not bring it back", () => {
+  const db = setup().open();
+  const store = createAccountStore(db);
+  const selection = createAccountSelection(db);
+  store.save({ id: "second", name: "Second" });
+  const main = store.list()[0]!.id;
+  selection.set([main, "second"], store.list());
+
+  store.archive("second", true);
+  expect([...selection.ids(store.list())]).toEqual([main]);
+  selection.drop("second");
+  store.archive("second", false);
+  expect([...selection.ids(store.list())]).toEqual([main]);
+
+  store.archive("second", true);
+  store.remove("second");
+  selection.drop("second");
+  expect([...selection.ids(store.list())]).toEqual([main]);
+});
+
+test.each([
+  ["an account that does not exist", ["ghost"]],
+  ["an archived account", ["archived"]],
+])("marking %s is refused and changes nothing", (_case, ids) => {
+  const db = setup().open();
+  const store = createAccountStore(db);
+  const selection = createAccountSelection(db);
+  store.save({ id: "archived", name: "Archived" });
+  const main = store.list()[0]!.id;
+  selection.set([main], store.list());
+  store.archive("archived", true);
+  expect(() => selection.set(ids, store.list())).toThrow(AccountError);
+  expect([...selection.ids(store.list())]).toEqual([main]);
 });

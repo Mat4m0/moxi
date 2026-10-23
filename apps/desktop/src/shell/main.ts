@@ -26,7 +26,12 @@ import { createClientCache } from "../game-files/client.ts";
 import { createClientReadiness } from "../client-readiness.ts";
 import { createClientRoutes } from "./client.js";
 
-import { openDatabase, migrations, createAccountStore } from "../storage/index.js";
+import {
+  openDatabase,
+  migrations,
+  createAccountStore,
+  createAccountSelection,
+} from "../storage/index.js";
 import { createGameWindows } from "../game-windows.js";
 import { createPluginDocuments } from "../plugin-documents.ts";
 import { loadPluginBundles } from "../plugin-bundles.ts";
@@ -93,6 +98,7 @@ const sessions = new Map<
 >();
 let windowState: ReturnType<typeof createWindowStateSettings> | undefined;
 let accounts: ReturnType<typeof createAccountStore>;
+let accountSelection: ReturnType<typeof createAccountSelection>;
 const gameWindows = createGameWindows();
 // One game window per account, each in its own browser partition.
 const gameByAccount = new Map<string, BrowserWindow>();
@@ -208,7 +214,13 @@ function prepareAccountSession(accountId: string) {
   accountSession.protocol.handle("moxi", appHandlerFor(accountId));
 }
 function currentAccounts(): Account[] {
-  return accounts.list().map((stored) => ({ ...stored, ...gameWindows.state(stored.id) }));
+  const stored = accounts.list();
+  const marked = accountSelection.ids(stored);
+  return stored.map((entry) => ({
+    ...entry,
+    selected: marked.has(entry.id),
+    ...gameWindows.state(entry.id),
+  }));
 }
 function broadcastAccounts() {
   const list = currentAccounts();
@@ -554,6 +566,7 @@ else {
       const appearance = createAppearanceSettings(database);
       windowState = createWindowStateSettings(database);
       accounts = createAccountStore(database);
+      accountSelection = createAccountSelection(database);
       refreshAccountsMenu();
       const windowKind = (id: number) => windows.get(id)?.kind;
       const pluginDocuments = createPluginDocuments(database);
@@ -678,6 +691,7 @@ else {
         ({ id, archived }) => {
           if (gameWindows.running(id)) throw new Error("Close the account's game window first.");
           accounts.archive(id, archived);
+          if (archived) accountSelection.drop(id);
           broadcastAccounts();
           return currentAccounts();
         },
@@ -688,11 +702,21 @@ else {
         async ({ id }) => {
           if (gameWindows.running(id)) throw new Error("Close the account's game window first.");
           accounts.remove(id);
+          accountSelection.drop(id);
           gameWindows.forget(id);
           accountRoutes.delete(id);
           const accountSession = session.fromPartition(partitionOf(id));
           await accountSession.clearStorageData();
           await accountSession.clearCache();
+          broadcastAccounts();
+          return currentAccounts();
+        },
+        windowKind,
+      );
+      handle(
+        "accounts.select",
+        ({ ids }) => {
+          accountSelection.set(ids, accounts.list());
           broadcastAccounts();
           return currentAccounts();
         },

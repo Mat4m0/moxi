@@ -8,12 +8,11 @@ import {
   sameMenuModel,
 } from "./window-policy";
 
-const look = { icon: "swords", color: "#9a6638" } as const;
 const account = (id: string, name: string, extra: Partial<Account> = {}): Account => ({
   id,
   name,
   archived: false,
-  appearance: look,
+  selected: false,
   state: "closed",
   ...extra,
 });

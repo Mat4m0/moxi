@@ -1,6 +1,6 @@
 import type { UiColor } from "./appearance";
 
-export function parseRgb(color: UiColor): readonly [number, number, number] {
+function parseRgb(color: UiColor): readonly [number, number, number] {
   return [
     Number.parseInt(color.slice(1, 3), 16),
     Number.parseInt(color.slice(3, 5), 16),
@@ -14,15 +14,10 @@ function luminance(color: UiColor): number {
   });
   return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
 }
-export function contrastRatio(a: UiColor, b: UiColor): number {
+function contrastRatio(a: UiColor, b: UiColor): number {
   const first = luminance(a),
     second = luminance(b);
   return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
-}
-export function readableForeground(background: UiColor): UiColor {
-  return contrastRatio(background, "#F7F3E8") >= contrastRatio(background, "#171613")
-    ? "#F7F3E8"
-    : "#171613";
 }
 export function compositeColor(foreground: UiColor, background: UiColor, opacity: number): UiColor {
   const target = parseRgb(foreground);
@@ -36,7 +31,7 @@ export function compositeColor(foreground: UiColor, background: UiColor, opacity
     .toUpperCase();
   return `#${hex}`;
 }
-export function readableSharedForeground(backgrounds: readonly UiColor[]): UiColor {
+function readableSharedForeground(backgrounds: readonly UiColor[]): UiColor {
   let best: UiColor = "#F7F3E8";
   let score = 0;
   for (let channel = 0; channel <= 255; channel++) {

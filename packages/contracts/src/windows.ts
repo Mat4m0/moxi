@@ -11,6 +11,7 @@ export const windowChannels = {
     "accounts.save",
     "accounts.archive",
     "accounts.remove",
+    "accounts.select",
     "accounts.play",
   ],
   game: [

@@ -15,30 +15,15 @@ export const socketEvent = type({ id: "number.safe >= 0", kind: "'open' | 'close
 );
 export type SocketEvent = typeof socketEvent.infer;
 const socketId = type({ id: "number.safe >= 0" });
-const uiColor = type("string & /^#[0-9a-fA-F]{6}$/").as<`#${string}`>();
 export const appearanceFields = {
-  uiStyle: type("'classic' | 'obsidian' | 'custom'"),
+  uiStyle: type("'classic' | 'obsidian'"),
   uiPanelOpacity: type("40 <= number.integer <= 100"),
   uiFont: type("'guild-wars' | 'inter' | 'system' | 'avenir' | 'georgia' | 'palatino'"),
-  uiCustomTheme: type({
-    material: "'classic' | 'modern'",
-    window: uiColor,
-    titlebar: uiColor,
-    surface: uiColor,
-    recessed: uiColor,
-    selected: uiColor,
-    accent: uiColor,
-    text: uiColor,
-    mutedText: uiColor,
-    border: uiColor,
-    windowGradient: "boolean",
-  }),
 };
 export const appearanceSettings = type({
   uiStyle: appearanceFields.uiStyle,
   uiPanelOpacity: appearanceFields.uiPanelOpacity,
   uiFont: appearanceFields.uiFont,
-  "uiCustomTheme?": appearanceFields.uiCustomTheme,
 });
 export type AppearanceSettings = typeof appearanceSettings.infer;
 export const download = type({
@@ -124,14 +109,15 @@ export const channels = {
     response: accountList,
   }),
   "accounts.remove": defineChannel({ request: type({ id: accountId }), response: accountList }),
+  "accounts.select": defineChannel({ request: accountSelection, response: accountList }),
   "accounts.play": defineChannel({
     request: type({ ids: accountId.array().atLeastLength(1).atMostLength(16) }),
     response: type("undefined"),
   }),
 };
 import { windowChannels, type WindowKind } from "./windows.js";
-import { accountId, accountList, accountSave, type Account } from "./accounts.js";
-export { accountAppearance, accountId, type Account, type AccountSave } from "./accounts.js";
+import { accountId, accountList, accountSave, accountSelection, type Account } from "./accounts.js";
+export { accountId, type Account, type AccountSave } from "./accounts.js";
 export { hubPortMessage, windowChannels, type WindowKind } from "./windows.js";
 /** Where Main asks the launcher to go when it brings the launcher back, e.g. from the Accounts menu. */
 export type LauncherDestination = "accounts";

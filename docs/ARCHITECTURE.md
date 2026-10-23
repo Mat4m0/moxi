@@ -102,11 +102,12 @@ other Main code is plain Node, so Vitest runs it without Electron.
 - Main saves the launcher and game window placement as settings (normal bounds plus full screen
   or maximized). A first launch opens both maximized; bounds that no display shows any
   more are brought back into view.
-- Accounts are rows `(id, name, icon, color, archived, created_at)`. A first run creates one
+- Accounts are rows `(id, name, archived, created_at)`. A first run creates one
   account. Whether an account is open comes from its game window, never from storage. Each
   account's game window runs in its own browser partition, `persist:account-<id>`, so two
   accounts share no cookies or saved game files. Deleting an archived account also deletes its
-  partition, its plugin documents and its stored login.
+  partition, its plugin documents and its stored login. The accounts marked for "Play selected"
+  are the `selectedAccounts` setting; Main keeps it and an archived or deleted account loses its mark.
 - Window policy (`apps/desktop/src/window-policy.ts`): after Play the launcher hides and the first
   account's game window is in front. Closing the launcher while a game is open hides it. Closing
   the last game window brings it back. Closing it with no game open, or quitting, ends the app.

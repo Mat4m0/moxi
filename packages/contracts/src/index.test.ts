@@ -61,28 +61,21 @@ const denied: [ChannelName, WindowKind | undefined, unknown][] = [
   ["accounts.play", "launcher", { ids: [] }],
   ["accounts.play", "launcher", { ids: ["../escape"] }],
   ["accounts.archive", "launcher", { id: "main" }],
-  [
-    "accounts.save",
-    "launcher",
-    { id: "a/b", name: "Alice", appearance: { icon: "swords", color: "#9a6638" } },
-  ],
-  [
-    "accounts.save",
-    "launcher",
-    { id: "alice", name: "Alice", appearance: { icon: "skull", color: "#9a6638" } },
-  ],
-  [
-    "accounts.save",
-    "launcher",
-    { id: "alice", name: "Alice", appearance: { icon: "swords", color: "red" } },
-  ],
+  ["accounts.save", "launcher", { id: "a/b", name: "Alice" }],
+  ["accounts.save", "launcher", { id: "alice" }],
+  ["accounts.save", "launcher", { name: "Alice" }],
   ["appearance.set", "game", { uiStyle: "obsidian", uiPanelOpacity: 94, uiFont: "guild-wars" }],
   ["appearance.set", "launcher", { uiStyle: "classic", uiPanelOpacity: 39, uiFont: "guild-wars" }],
+  ["appearance.set", "launcher", { uiStyle: "custom", uiPanelOpacity: 94, uiFont: "guild-wars" }],
   [
     "appearance.set",
     "launcher",
     { uiStyle: "classic", uiPanelOpacity: 94.5, uiFont: "guild-wars" },
   ],
+  ["accounts.select", "game", { ids: ["main"] }],
+  ["accounts.select", "launcher", { ids: ["../escape"] }],
+  ["accounts.select", "launcher", { ids: Array.from({ length: 65 }, (_, index) => `a${index}`) }],
+  ["accounts.select", "launcher", { id: "main" }],
   ["app.info", "pluginHost", undefined],
   ["game.client", "launcher", undefined],
   ["game.client", "pluginHost", undefined],
@@ -114,7 +107,7 @@ test("accepts copied TCP bytes from the game window", () => {
 });
 
 test("accepts a new account and a play request from the launcher", () => {
-  const account = { id: "alice-2", name: "Alice", appearance: { icon: "star", color: "#496b58" } };
+  const account = { id: "alice-2", name: "Alice" };
   expect(validateRequest("accounts.save", "launcher", account)).toEqual(account);
   expect(validateRequest("accounts.play", "launcher", { ids: ["alice-2", "main"] })).toEqual({
     ids: ["alice-2", "main"],

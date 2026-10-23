@@ -49,9 +49,9 @@ test("opaque plugin workers cannot access storage, game files or network and lea
       .toBe(true);
     const launcher = started.windows().find((page) => page.url() === "moxi://app/launcher/");
     if (!launcher) throw new Error("Launcher did not open");
-    await expect(launcher.getByRole("button", { name: "Play", exact: true })).toBeEnabled();
+    await expect(launcher.getByRole("button", { name: /^Play / })).toBeEnabled();
     const running = application;
-    await launcher.getByRole("button", { name: "Play", exact: true }).click();
+    await launcher.getByRole("button", { name: /^Play / }).click();
     await expect
       .poll(() => running.windows().some((page) => page.url() === "moxi://app/game/"))
       .toBe(true);

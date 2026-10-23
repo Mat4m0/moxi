@@ -1,37 +1,11 @@
-import type { Download, Profile, Readiness } from "./launcher-data";
+import type { Account, Download } from "./launcher-data";
 
-export function profileStatus(profile: Profile): string {
-  const states = {
-    ready: "Ready",
-    queued: "Waiting for game files",
-    opening: "Opening",
-    checking: "Checking the game window",
-    running: "Open",
-  };
-  if (profile.state !== "failed") return states[profile.state];
-  switch (profile.failure) {
-    case "profile-preparation":
-      return "Account files could not be prepared";
-    case "window-startup":
-      return "Game window did not open";
-    case "client-validation":
-      return "Game client check failed";
-    case "renderer-crash":
-      return "Game window closed unexpectedly";
-    default:
-      return "Could not open this account";
-  }
-}
-export function launchLabel(profiles: readonly Profile[], readiness: Readiness): string {
-  if (readiness.state === "repair-required") return "Open Game Files";
-  if (profiles.some((profile) => profile.state === "queued")) return "Cancel waiting";
-  if (profiles.some((profile) => profile.state === "checking"))
-    return profiles.length === 1 ? "Checking game window…" : "Checking game windows…";
-  if (profiles.some((profile) => profile.state === "opening"))
-    return profiles.length === 1 ? "Opening account…" : "Opening accounts…";
-  const closed = profiles.filter((profile) => profile.state !== "running").length;
-  if (!closed) return profiles.length === 1 ? "Show" : "Accounts are open";
-  return closed === 1 ? "Play" : `Open ${closed} accounts`;
+export function accountStatus(account: Account): string {
+  if (account.state === "closed") return "Ready";
+  if (account.state === "running") return "Open";
+  return account.failure === "renderer-crash"
+    ? "Game window closed unexpectedly"
+    : "Could not open this account";
 }
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return "0 MB";

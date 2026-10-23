@@ -1,4 +1,4 @@
-import { accountAppearance, accountId, type AccountSave } from "@moxi/contracts";
+import { accountId, type AccountSave } from "@moxi/contracts";
 import { accountNameProblem } from "@moxi/contracts/account-name";
 import type { Database } from "./database";
 
@@ -7,18 +7,16 @@ export type StoredAccount = AccountSave & { archived: boolean };
 /** A refusal the player can read: it names what to change. */
 export class AccountError extends Error {}
 
-const FIRST_ACCOUNT = { name: "Main account", icon: "swords", color: "#9a6638" } as const;
+const FIRST_ACCOUNT_NAME = "Main account";
 
 /** The accounts table. A first run gets one account, so the launcher is never empty. */
 export function createAccountStore(db: Database, now: () => number = Date.now) {
-  const select = db.prepare(
-    "SELECT id, name, icon, color, archived FROM accounts ORDER BY created_at, rowid",
-  );
+  const select = db.prepare("SELECT id, name, archived FROM accounts ORDER BY created_at, rowid");
   const find = db.prepare("SELECT id, name, archived FROM accounts WHERE id = ?");
   const insert = db.prepare(
-    "INSERT INTO accounts (id, name, icon, color, archived, created_at) VALUES (?, ?, ?, ?, 0, ?)",
+    "INSERT INTO accounts (id, name, archived, created_at) VALUES (?, ?, 0, ?)",
   );
-  const update = db.prepare("UPDATE accounts SET name = ?, icon = ?, color = ? WHERE id = ?");
+  const update = db.prepare("UPDATE accounts SET name = ? WHERE id = ?");
   const setArchived = db.prepare("UPDATE accounts SET archived = ? WHERE id = ?");
   const activeCount = db.prepare("SELECT COUNT(*) AS n FROM accounts WHERE archived = 0");
 
@@ -27,7 +25,6 @@ export function createAccountStore(db: Database, now: () => number = Date.now) {
       id: accountId.assert(row.id),
       name: String(row.name),
       archived: row.archived === 1,
-      appearance: accountAppearance.assert({ icon: row.icon, color: row.color }),
     }));
   }
   function transaction<T>(work: () => T): T {
@@ -41,24 +38,13 @@ export function createAccountStore(db: Database, now: () => number = Date.now) {
       throw error;
     }
   }
-  if (list().length === 0)
-    insert.run(
-      crypto.randomUUID(),
-      FIRST_ACCOUNT.name,
-      FIRST_ACCOUNT.icon,
-      FIRST_ACCOUNT.color,
-      now(),
-    );
+  if (list().length === 0) insert.run(crypto.randomUUID(), FIRST_ACCOUNT_NAME, now());
 
   return {
     list,
-    /** Adds an account with a new id, or edits the name and look of an existing one. */
+    /** Adds an account with a new id, or renames an existing one. */
     save(input: AccountSave) {
-      const value = {
-        id: accountId.assert(input.id),
-        name: input.name.trim(),
-        appearance: accountAppearance.assert(input.appearance),
-      };
+      const value = { id: accountId.assert(input.id), name: input.name.trim() };
       const problem = accountNameProblem(value.name);
       if (problem) throw new AccountError(problem);
       transaction(() => {
@@ -68,9 +54,8 @@ export function createAccountStore(db: Database, now: () => number = Date.now) {
             stored.name.toLocaleLowerCase() === value.name.toLocaleLowerCase(),
         );
         if (taken) throw new AccountError("Another account already uses this name.");
-        if (find.get(value.id))
-          update.run(value.name, value.appearance.icon, value.appearance.color, value.id);
-        else insert.run(value.id, value.name, value.appearance.icon, value.appearance.color, now());
+        if (find.get(value.id)) update.run(value.name, value.id);
+        else insert.run(value.id, value.name, now());
       });
     },
     /** The last account in use cannot be archived: the launcher always has one to play. */

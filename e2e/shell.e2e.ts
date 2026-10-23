@@ -147,7 +147,7 @@ test("shell keeps one launcher, rejects launcher actions from the game, and quit
       await launcher.screenshot({ path: resolve(root, ".evidence/g1/launcher-after.png") });
     });
     await test.step("Play opens the game through the drive command", async () => {
-      await expect(launcher.getByRole("button", { name: "Play", exact: true })).toBeEnabled();
+      await expect(launcher.getByRole("button", { name: /^Play / })).toBeEnabled();
       await drive(["click", "launcher", "Play"]);
       await expect
         .poll(() => application.windows().some((page) => page.url() === "moxi://app/game/"))
@@ -176,10 +176,6 @@ test("shell keeps one launcher, rejects launcher actions from the game, and quit
       await game.screenshot({ path: resolve(root, ".evidence/g1/hub-modern.png") });
       await launcher.getByRole("combobox", { name: /^Panel style/ }).selectOption("classic");
       await expect(game.locator("html")).toHaveAttribute("data-ui-style", "classic");
-      await launcher.getByRole("combobox", { name: /^Panel style/ }).selectOption("custom");
-      await launcher.getByRole("combobox", { name: /^Panel finish/ }).selectOption("modern");
-      await expect(game.locator("html")).toHaveAttribute("data-ui-style", "obsidian");
-      await expect(launcher.locator("html")).toHaveAttribute("data-ui-style", "obsidian");
       await launcher.getByRole("combobox", { name: /^Panel style/ }).selectOption("obsidian");
       await expect(game.locator("html")).toHaveAttribute("data-ui-style", "obsidian");
       await game.getByRole("textbox").fill("10 ecto in p");
@@ -319,7 +315,7 @@ test("an offline fresh install refuses Play and offers repair", async ({ playwri
       await expect(
         launcher.getByRole("button", { name: "Open Game Files", exact: true }),
       ).toBeEnabled();
-      await expect(launcher.getByRole("button", { name: "Play", exact: true })).toHaveCount(0);
+      await expect(launcher.getByRole("button", { name: /^Play / })).toHaveCount(0);
       expect(
         await launcher.evaluate(async () => {
           try {
@@ -345,7 +341,7 @@ test("an offline fresh install refuses Play and offers repair", async ({ playwri
       await expect(
         launcher.getByRole("main").getByText("Downloading the playable client", { exact: true }),
       ).toBeVisible();
-      await expect(launcher.getByRole("button", { name: "Play", exact: true })).toBeDisabled();
+      await expect(launcher.getByRole("button", { name: /^Play / })).toBeDisabled();
       await expect(launcher.getByText("Repair needed", { exact: true })).toBeVisible();
       expect(application.windows().some((page) => page.url() === "moxi://app/game/")).toBe(false);
     });
