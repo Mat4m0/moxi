@@ -61,12 +61,17 @@ window.addEventListener("message", (event: MessageEvent) => {
   );
   sessions.set(id, { host, port });
   port.addEventListener("close", () => sessions.delete(id));
-  void plugins
-    .then((entries) => {
+  // The switches are read as the plugins register, so one made meanwhile cannot be missed.
+  void Promise.all([plugins, window.moxi.invoke("tools.list", undefined)])
+    .then(([entries, tools]) => {
       if (sessions.get(id)?.host !== host) return;
-      for (const entry of entries) host.register(entry.manifest, entry.script, entry.bytes);
+      const off = new Set(tools.filter((tool) => !tool.enabled).map((tool) => tool.id));
+      for (const entry of entries) host.register(entry.manifest, entry.script, entry.bytes, off);
     })
     .catch(() => host.dispose());
+});
+window.moxi.onToolSwitched(({ id, enabled }) => {
+  for (const { host } of sessions.values()) host.setEnabled(id, enabled);
 });
 window.postMessage("moxi-hub-ready", "*");
 window.addEventListener(

@@ -4,7 +4,7 @@ import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { createAppearanceSettings } from "./appearance";
+import { createToolSettings } from "./tool-settings";
 import { createWindowStateSettings } from "./window-state";
 import {
   openDatabase,
@@ -165,19 +165,17 @@ test.each([[0], [1, 1], [2, 1], [1.5], [2147483648]])(
 test.each([
   ["invalid JSON", "{"],
   ["wrong type", '"loud"'],
+  ["a bad plugin id", '["../escape"]'],
 ])("a stored setting with %s falls back without repeated log lines", (_reason, json) => {
   const db = setup().open();
-  db.prepare("INSERT INTO settings VALUES (?, ?)").run("uiPanelOpacity", json);
+  db.prepare("INSERT INTO settings VALUES (?, ?)").run("disabledTools", json);
   const logs: string[] = [];
-  const settings = createAppearanceSettings(db, (message) => logs.push(message));
-  expect(settings.get()).toEqual({ uiStyle: "classic", uiPanelOpacity: 94, uiFont: "guild-wars" });
-  settings.get();
-  expect(logs).toEqual(['Invalid stored setting "uiPanelOpacity"; using default.']);
-  expect(() =>
-    settings.set({ uiStyle: "classic", uiPanelOpacity: 101, uiFont: "guild-wars" }),
-  ).toThrow();
-  settings.set({ uiStyle: "classic", uiPanelOpacity: 75, uiFont: "guild-wars" });
-  expect(settings.get()).toEqual({ uiStyle: "classic", uiPanelOpacity: 75, uiFont: "guild-wars" });
+  const settings = createToolSettings(db, (message) => logs.push(message));
+  expect(settings.disabled()).toEqual([]);
+  settings.disabled();
+  expect(logs).toEqual(['Invalid stored setting "disabledTools"; using default.']);
+  settings.set("moxi.builds", false);
+  expect(settings.disabled()).toEqual(["moxi.builds"]);
 });
 
 test("stale document writes cannot overwrite fresh data or send a change event", () => {
@@ -272,16 +270,19 @@ test("saved credentials survive reopening as encrypted blobs and clear removes t
   expect(reopened.load("test-account")).toBeNull();
 });
 
-test("appearance saved through Main settings survives reopening the database", () => {
+test("a tool switched off stays off after reopening the database, and switching it on again forgets it", () => {
   const fixture = setup();
   const db = fixture.open();
-  createAppearanceSettings(db).set({ uiStyle: "obsidian", uiPanelOpacity: 80, uiFont: "inter" });
+  const tools = createToolSettings(db);
+  expect(tools.disabled()).toEqual([]);
+  tools.set("moxi.target-distance", false);
+  tools.set("moxi.builds", false);
+  tools.set("moxi.builds", false);
   db.close();
-  expect(createAppearanceSettings(fixture.open()).get()).toEqual({
-    uiStyle: "obsidian",
-    uiPanelOpacity: 80,
-    uiFont: "inter",
-  });
+  const reopened = createToolSettings(fixture.open());
+  expect(reopened.disabled()).toEqual(["moxi.builds", "moxi.target-distance"]);
+  reopened.set("moxi.builds", true);
+  expect(reopened.disabled()).toEqual(["moxi.target-distance"]);
 });
 
 test("window state saved through Main settings survives reopening, and a bad row reads as nothing saved", () => {

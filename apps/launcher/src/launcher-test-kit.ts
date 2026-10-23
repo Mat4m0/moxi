@@ -1,4 +1,4 @@
-import type { Account, Readiness } from "@moxi/contracts";
+import type { Account, Readiness, Tool } from "@moxi/contracts";
 
 export const account = (id: string, name: string, extra: Partial<Account> = {}): Account => ({
   id,
@@ -10,12 +10,21 @@ export const account = (id: string, name: string, extra: Partial<Account> = {}):
 });
 
 /** A stand-in for Main: answers the launcher's channels and records what it was asked. */
+export const tool = (id: string, name: string, enabled = true): Tool => ({
+  id,
+  name,
+  description: `${name} description`,
+  enabled,
+});
+
 export function connectMain(
   initial: Account[],
   readiness: Readiness = { state: "playable", backgroundDownload: null },
+  tools: Tool[] = [],
 ) {
   const main = {
     accounts: initial,
+    tools,
     refuse: new Set<string>(),
     navigate: (_destination: "accounts") => {},
     changed: (_accounts: Account[]) => {},
@@ -28,8 +37,14 @@ export function connectMain(
       if (main.refuse.has(name)) throw new Error("refused");
       if (name === "client.readiness") return readiness;
       if (name === "app.info") return { productName: "Moxi", version: "0.1.0", channel: "dev" };
-      if (name === "appearance.get")
-        return { uiStyle: "classic", uiPanelOpacity: 94, uiFont: "guild-wars" };
+      if (name === "tools.list") return main.tools;
+      if (name === "tools.set") {
+        const change = request as { id: string; enabled: boolean };
+        main.tools = main.tools.map((entry) =>
+          entry.id === change.id ? { ...entry, enabled: change.enabled } : entry,
+        );
+        return main.tools;
+      }
       if (name === "accounts.select") {
         const marked = new Set((request as { ids: string[] }).ids);
         main.accounts = main.accounts.map((entry) => ({

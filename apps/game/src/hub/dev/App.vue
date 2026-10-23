@@ -3,19 +3,9 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { host, publishFacts, onGameAction, setEnabled, setSetting } from "../client.ts";
 import { sim, tick, observe, performAction } from "./game-sim.ts";
 import Hub from "../Hub.vue";
-import { appearanceVariables } from "@moxi/ui";
 import type { HudNode } from "@moxi/sdk";
 
 onGameAction(performAction);
-const uiStyle = ref<"classic" | "obsidian">("classic");
-function applyAppearance(uiPanelOpacity = 94) {
-  document.documentElement.dataset.uiStyle = uiStyle.value;
-  for (const [key, value] of Object.entries(
-    appearanceVariables({ uiStyle: uiStyle.value, uiFont: "guild-wars", uiPanelOpacity }),
-  ))
-    document.documentElement.style.setProperty(key, value);
-}
-applyAppearance();
 const hubOpen = ref(false);
 const gameKeys = ref(0); // key presses that reached "the game"
 const heldFromHub = new Set<string>(); // keys pressed inside Hub; their repeats and releases never reach the game
@@ -140,13 +130,6 @@ const fmtTime = (t: number) =>
       <h1>Plugin runtime probe</h1>
       <section>
         <h2>Game simulation</h2>
-        <label
-          >Theme
-          <select v-model="uiStyle" aria-label="Theme" @change="applyAppearance(100)">
-            <option value="classic">Classic</option>
-            <option value="obsidian">Modern</option>
-          </select>
-        </label>
         <label
           >Integration
           <select v-model="sim.mode">

@@ -36,7 +36,8 @@ import { createGameWindows } from "../game-windows.js";
 import { createPluginDocuments } from "../plugin-documents.ts";
 import { loadPluginBundles } from "../plugin-bundles.ts";
 import { pluginCsp } from "../plugin-isolation.ts";
-import { createAppearanceSettings } from "../storage/appearance.js";
+import { createToolSettings } from "../storage/tool-settings.js";
+import { createTools } from "../tool-switches.js";
 import { createWindowStateSettings } from "../storage/window-state.js";
 import { captureWindow, planWindow, type SavedWindowKind } from "../window-state.js";
 import {
@@ -563,7 +564,10 @@ else {
         migrations,
       });
       app.once("will-quit", () => database.close());
-      const appearance = createAppearanceSettings(database);
+      const tools = createTools({
+        bundles: () => loadPluginBundles(roots["plugin-host"]),
+        store: createToolSettings(database),
+      });
       windowState = createWindowStateSettings(database);
       accounts = createAccountStore(database);
       accountSelection = createAccountSelection(database);
@@ -578,16 +582,15 @@ else {
           if (kind === "pluginHost" && !window.webContents.isDestroyed())
             window.webContents.send("plugin.doc.changed", change);
       });
-      handle("appearance.get", () => appearance.get(), windowKind);
+      handle("tools.list", () => tools.list(), windowKind);
       handle(
-        "appearance.set",
-        (settings) => {
-          appearance.set(settings);
-          for (const entry of windows.values()) {
-            if (entry.kind === "game" && !entry.window.webContents.isDestroyed())
-              entry.window.webContents.send("appearance.changed", appearance.get());
-          }
-          return undefined;
+        "tools.set",
+        async (change) => {
+          const list = await tools.set(change.id, change.enabled);
+          for (const { kind, window } of windows.values())
+            if (kind === "pluginHost" && !window.webContents.isDestroyed())
+              window.webContents.send("tools.switched", change);
+          return list;
         },
         windowKind,
       );

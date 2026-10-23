@@ -192,6 +192,10 @@ See `packages/sdk/README.md` for the contract. The host rules:
   plugin's UI (3 s, single use). Multi-step flows are host actions.
 - A plugin that does not answer a ping for 2.5 s is stopped. Three crashes in
   ten minutes disable it until the player re-enables it.
+- The launcher's Settings → Tools switches each bundled plugin on or off for every account. Main
+  stores the off ones in the `disabledTools` setting, hands them to the plugin host when it
+  registers the plugins, and sends each later switch to the host at once. The crash disable above
+  is runtime only: the switch is not changed, and switching the plugin on again clears it.
 
 ## Hub
 

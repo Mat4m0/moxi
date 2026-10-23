@@ -15,17 +15,6 @@ export const socketEvent = type({ id: "number.safe >= 0", kind: "'open' | 'close
 );
 export type SocketEvent = typeof socketEvent.infer;
 const socketId = type({ id: "number.safe >= 0" });
-export const appearanceFields = {
-  uiStyle: type("'classic' | 'obsidian'"),
-  uiPanelOpacity: type("40 <= number.integer <= 100"),
-  uiFont: type("'guild-wars' | 'inter' | 'system' | 'avenir' | 'georgia' | 'palatino'"),
-};
-export const appearanceSettings = type({
-  uiStyle: appearanceFields.uiStyle,
-  uiPanelOpacity: appearanceFields.uiPanelOpacity,
-  uiFont: appearanceFields.uiFont,
-});
-export type AppearanceSettings = typeof appearanceSettings.infer;
 export const download = type({
   status: "'running' | 'paused' | 'complete'",
   received: "number.safe >= 0",
@@ -66,8 +55,8 @@ export const channels = {
   "download.resume": defineChannel({ request: type("undefined"), response: type("undefined") }),
   "client.readiness": defineChannel({ request: type("undefined"), response: clientReadiness }),
   "client.retry": defineChannel({ request: type("undefined"), response: type("undefined") }),
-  "appearance.get": defineChannel({ request: type("undefined"), response: appearanceSettings }),
-  "appearance.set": defineChannel({ request: appearanceSettings, response: type("undefined") }),
+  "tools.list": defineChannel({ request: type("undefined"), response: toolList }),
+  "tools.set": defineChannel({ request: toolSwitch, response: toolList }),
   "game.net.connect": defineChannel({
     request: type({ id: "number.safe >= 0", destination: "string <= 256" }),
     response: type("undefined"),
@@ -117,7 +106,9 @@ export const channels = {
 };
 import { windowChannels, type WindowKind } from "./windows.js";
 import { accountId, accountList, accountSave, accountSelection, type Account } from "./accounts.js";
+import { toolList, toolSwitch, type ToolSwitch } from "./tools.js";
 export { accountId, type Account, type AccountSave } from "./accounts.js";
+export { toolId, type Tool, type ToolSwitch } from "./tools.js";
 export { hubPortMessage, windowChannels, type WindowKind } from "./windows.js";
 /** Where Main asks the launcher to go when it brings the launcher back, e.g. from the Accounts menu. */
 export type LauncherDestination = "accounts";
@@ -132,7 +123,6 @@ export type Bridge<K extends WindowKind> = {
 } & (K extends "game"
   ? {
       onSocketEvent(listener: (event: SocketEvent) => void): () => void;
-      onAppearanceChanged(listener: (settings: AppearanceSettings) => void): () => void;
     }
   : K extends "launcher"
     ? {
@@ -142,6 +132,8 @@ export type Bridge<K extends WindowKind> = {
       }
     : K extends "pluginHost"
       ? {
+          /** The one tool the player just switched on or off; the list comes from `tools.list`. */
+          onToolSwitched(listener: (change: ToolSwitch) => void): () => void;
           onDocumentChanged(
             listener: (change: import("./documents.js").DocumentChange) => void,
           ): () => void;

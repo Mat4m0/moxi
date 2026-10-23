@@ -1,34 +1,28 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from "vue";
-import { applyAppearance } from "@moxi/ui";
+import { computed, nextTick, onMounted, ref } from "vue";
 import { AlertTriangle } from "lucide-vue-next";
 import type { Account, LauncherData, LauncherRoute, SettingsRoute } from "./launcher-data";
 import AccountsView from "./components/AccountsView.vue";
 import AccountEditor from "./components/AccountEditor.vue";
-import AppearanceSettings from "./components/AppearanceSettings.vue";
 import GameFilesSettings from "./components/GameFilesSettings.vue";
 import LauncherHeader from "./components/LauncherHeader.vue";
 import ReadinessBar from "./components/ReadinessBar.vue";
+import ToolsSettings from "./components/ToolsSettings.vue";
 const props = defineProps<{ data: LauncherData }>();
 const state = props.data.state;
-watch(
-  () => state.value.settings,
-  (settings) => applyAppearance(document.documentElement, settings),
-  { immediate: true },
-);
 const ready = ref(false);
 const startupError = ref(false);
 const error = ref("");
 const busy = ref(false);
 const route = ref<LauncherRoute>("accounts");
-const panel = ref<SettingsRoute>("appearance");
+const panel = ref<SettingsRoute>("tools");
 const editing = ref<{ account: Account | null } | null>(null);
 const marked = computed(() =>
   state.value.accounts.filter((account) => !account.archived && account.selected),
 );
 const content = ref<HTMLElement>();
 const sections = [
-  { id: "appearance", label: "Appearance" },
+  { id: "tools", label: "Tools" },
   { id: "game-files", label: "Game files" },
 ] as const;
 async function initialize() {
@@ -125,7 +119,7 @@ async function playSelected() {
         <div ref="content" class="settings-content">
           <fieldset class="settings-fields">
             <legend class="visually-hidden">Settings for every account</legend>
-            <AppearanceSettings v-if="panel === 'appearance'" :data="data" /><GameFilesSettings
+            <ToolsSettings v-if="panel === 'tools'" :data="data" /><GameFilesSettings
               v-else
               :data="data"
             />

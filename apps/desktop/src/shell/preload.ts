@@ -3,11 +3,11 @@ import { hubPortMessage, windowChannels, type WindowKind } from "@moxi/contracts
 import type {
   ChannelName,
   SocketEvent,
-  AppearanceSettings,
   Readiness,
   Account,
   DocumentChange,
   LauncherDestination,
+  ToolSwitch,
 } from "@moxi/contracts";
 export function exposeBridge(kind: WindowKind) {
   contextBridge.exposeInMainWorld("moxi", {
@@ -33,6 +33,11 @@ export function exposeBridge(kind: WindowKind) {
       : {}),
     ...(kind === "pluginHost"
       ? {
+          onToolSwitched(listener: (change: ToolSwitch) => void) {
+            const receive = (_event: IpcRendererEvent, change: ToolSwitch) => listener(change);
+            ipcRenderer.on("tools.switched", receive);
+            return () => ipcRenderer.removeListener("tools.switched", receive);
+          },
           onDocumentChanged(listener: (change: DocumentChange) => void) {
             const receive = (_event: IpcRendererEvent, change: DocumentChange) => listener(change);
             ipcRenderer.on("plugin.doc.changed", receive);
@@ -42,12 +47,6 @@ export function exposeBridge(kind: WindowKind) {
       : {}),
     ...(kind === "game"
       ? {
-          onAppearanceChanged(listener: (settings: AppearanceSettings) => void) {
-            const receive = (_event: IpcRendererEvent, settings: AppearanceSettings) =>
-              listener(settings);
-            ipcRenderer.on("appearance.changed", receive);
-            return () => ipcRenderer.removeListener("appearance.changed", receive);
-          },
           onSocketEvent(listener: (event: SocketEvent) => void) {
             const receive = (_event: IpcRendererEvent, message: SocketEvent) => listener(message);
             ipcRenderer.on("game.net.event", receive);

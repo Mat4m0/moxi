@@ -1,17 +1,17 @@
-import type { Account, AppearanceSettings, Readiness } from "@moxi/contracts";
+import type { Account, Readiness, Tool } from "@moxi/contracts";
 import { accountNameProblem } from "@moxi/contracts/account-name";
 import { shallowRef, type ShallowRef } from "vue";
 
-export type { Account, AppearanceSettings, Download, Readiness } from "@moxi/contracts";
+export type { Account, Download, Readiness, Tool } from "@moxi/contracts";
 export type LauncherRoute = "accounts" | "settings";
-export type SettingsRoute = "appearance" | "game-files";
+export type SettingsRoute = "tools" | "game-files";
 export interface LauncherState {
   productName: string;
   version: string;
   accounts: Account[];
   readiness: Readiness;
   gameFilesInfo: { bytes: number; totalBytes: number };
-  settings: AppearanceSettings;
+  tools: Tool[];
 }
 export interface LauncherData {
   state: ShallowRef<LauncherState>;
@@ -27,7 +27,8 @@ export interface LauncherData {
   remove(id: string): void;
   /** Removes an account that is not the last one, archived or not. */
   deleteAccount(id: string): void;
-  saveSettings(patch: Partial<AppearanceSettings>): Promise<void>;
+  /** Switches a bundled plugin on or off for every account. */
+  setTool(id: string, enabled: boolean): void;
   download(action: "pause" | "resume" | "repair" | "reset"): void;
 }
 
@@ -49,7 +50,7 @@ export function bridgeData(): LauncherData {
       },
     },
     gameFilesInfo: { bytes: 0, totalBytes: 0 },
-    settings: { uiStyle: "classic", uiPanelOpacity: 94, uiFont: "guild-wars" },
+    tools: [],
   });
   function applyReadiness(readiness: Readiness) {
     const progress = readiness.state === "playable" ? readiness.backgroundDownload : null;
@@ -69,6 +70,11 @@ export function bridgeData(): LauncherData {
   const refresh = () =>
     window.moxi.invoke("accounts.list", undefined).then(applyAccounts, () => undefined);
   const change = (request: Promise<Account[]>) => void request.then(applyAccounts, refresh);
+  function applyTools(tools: Tool[]) {
+    state.value = { ...state.value, tools };
+  }
+  const refreshTools = () =>
+    window.moxi.invoke("tools.list", undefined).then(applyTools, () => undefined);
   return {
     state,
     onNavigate(listener) {
@@ -85,13 +91,8 @@ export function bridgeData(): LauncherData {
       const readiness = await window.moxi.invoke("client.readiness", undefined);
       if (!changed) applyReadiness(readiness);
       const info = await window.moxi.invoke("app.info", undefined);
-      const settings = await window.moxi.invoke("appearance.get", undefined);
-      state.value = {
-        ...state.value,
-        settings,
-        productName: info.productName,
-        version: info.version,
-      };
+      state.value = { ...state.value, productName: info.productName, version: info.version };
+      applyTools(await window.moxi.invoke("tools.list", undefined));
     },
     async play(ids) {
       await window.moxi.invoke("accounts.play", { ids: [...ids] });
@@ -128,10 +129,8 @@ export function bridgeData(): LauncherData {
           .then(() => window.moxi.invoke("accounts.remove", { id })),
       );
     },
-    async saveSettings(patch) {
-      const settings = { ...state.value.settings, ...patch };
-      await window.moxi.invoke("appearance.set", settings);
-      state.value = { ...state.value, settings };
+    setTool(id, enabled) {
+      void window.moxi.invoke("tools.set", { id, enabled }).then(applyTools, refreshTools);
     },
     download(action) {
       if (action === "pause" || action === "resume")

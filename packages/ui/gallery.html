@@ -118,30 +118,9 @@
     <div class="controls">
       <h1>UI system</h1>
       <p class="sub">
-        The shipped Guild Wars Classic and Modern styles. This standalone gallery links production
-        tokens and components directly; custom projection is covered by the Tools, Trade, and Travel
-        workbenches.
+        The shipped Guild Wars look. This standalone gallery links production tokens and components
+        directly.
       </p>
-
-      <label class="ctl ui-field">
-        <span class="ui-field-label">Interface style</span>
-        <select class="ui-select" id="style">
-          <option value="guild-wars">Guild Wars · Default</option>
-          <option value="obsidian">Modern</option>
-        </select>
-      </label>
-
-      <label class="ctl ui-field">
-        <span class="ui-field-label">Typography</span>
-        <select class="ui-select" id="font">
-          <option value="guild-wars">Guild Wars Original</option>
-          <option value="inter">Inter</option>
-          <option value="system">System</option>
-          <option value="avenir">Avenir Next</option>
-          <option value="georgia">Georgia</option>
-          <option value="palatino">Palatino</option>
-        </select>
-      </label>
 
       <div class="ctl ui-range-field">
         <span>Panel opacity <output id="v-opacity">94%</output></span>
@@ -456,12 +435,6 @@
       const KNOBS = [{ id: "opacity", token: "--ui-panel-opacity", scale: 0.01, unit: "%" }];
 
       function apply() {
-        const style = document.getElementById("style").value;
-        if (style === "obsidian") root.dataset.uiStyle = style;
-        else delete root.dataset.uiStyle;
-        delete root.dataset.uiMaterial;
-        const font = document.getElementById("font").value;
-        root.dataset.uiFont = font;
         for (const knob of KNOBS) {
           const raw = Number(document.getElementById(knob.id).value);
           const value = knob.unit === "%" ? String(raw * knob.scale) : `${raw}px`;
@@ -472,13 +445,8 @@
       for (const knob of KNOBS) {
         document.getElementById(knob.id).addEventListener("input", apply);
       }
-      document.getElementById("style").addEventListener("change", apply);
-      document.getElementById("font").addEventListener("change", apply);
 
       window.gwSyncGalleryControls = () => {
-        document.getElementById("style").value =
-          root.dataset.uiStyle === "obsidian" ? "obsidian" : "guild-wars";
-        document.getElementById("font").value = root.dataset.uiFont || "guild-wars";
         for (const knob of KNOBS) {
           const current = parseFloat(root.style.getPropertyValue(knob.token));
           if (Number.isNaN(current)) continue;

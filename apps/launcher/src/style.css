@@ -538,13 +538,7 @@ select option {
   font-size: 13px;
   line-height: 1.4;
 }
-.setting-group select {
-  width: 200px;
-  max-width: 100%;
-  flex-shrink: 0;
-}
-.settings-page input:not([type="checkbox"]):not([type="range"]):not([type="color"]),
-.settings-page select {
+.settings-page input:not([type="checkbox"]) {
   min-height: 34px;
   padding: 6px 10px;
   border-radius: 5px;
@@ -578,12 +572,6 @@ select option {
 .setting-group > .setting-row:last-child,
 .setting-group > label:last-child {
   border-bottom: 0;
-}
-.appearance-heading {
-  margin: 28px 0 8px;
-  font-family: inherit;
-  font-size: 15px;
-  font-weight: 600;
 }
 .good {
   color: #a8d36d;
@@ -636,41 +624,6 @@ select option {
   gap: 18px;
   padding: 14px 0;
   border-bottom: 1px solid var(--line);
-}
-.range-control {
-  display: grid;
-  grid-template-columns: minmax(80px, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-  width: 264px;
-  max-width: 100%;
-}
-.range-control input[type="range"] {
-  width: 100%;
-  min-width: 0;
-  height: 34px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  accent-color: var(--gold);
-}
-.range-value {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.range-value input {
-  width: 60px;
-  height: 34px;
-  padding: 8px;
-  font-variant-numeric: tabular-nums;
-}
-.range-value span {
-  color: var(--muted);
-}
-.control-error {
-  grid-column: 1 / -1;
-  color: #f5b7ab;
 }
 .accounts-page {
   padding: 22px 32px;

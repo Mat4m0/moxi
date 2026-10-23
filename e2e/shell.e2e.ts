@@ -136,15 +136,14 @@ test("shell keeps one launcher, rejects launcher actions from the game, and quit
       expect((await drive(["windows"])).stdout).toContain("launcher\tMoxi");
       await drive(["screenshot", "launcher", testInfo.outputPath("launcher.png")]);
     });
-    await test.step("appearance saves Modern before opening the game", async () => {
+    await test.step("a tool switched off in Settings is saved before opening the game", async () => {
       await launcher.getByRole("button", { name: "Settings", exact: true }).click();
-      await launcher.getByRole("button", { name: "Appearance", exact: true }).click();
+      const distance = launcher.getByRole("switch", { name: "Target Distance", exact: true });
       await launcher.screenshot({ path: resolve(root, ".evidence/g1/launcher-before.png") });
-      await launcher.getByRole("combobox", { name: /^Panel style/ }).selectOption("obsidian");
-      await expect(launcher.getByRole("combobox", { name: /^Panel style/ })).toHaveValue(
-        "obsidian",
-      );
+      await distance.uncheck();
+      await expect(distance).not.toBeChecked();
       await launcher.screenshot({ path: resolve(root, ".evidence/g1/launcher-after.png") });
+      await launcher.getByRole("button", { name: "Accounts", exact: true }).click();
     });
     await test.step("Play opens the game through the drive command", async () => {
       await expect(launcher.getByRole("button", { name: /^Play / })).toBeEnabled();
@@ -172,12 +171,6 @@ test("shell keeps one launcher, rejects launcher actions from the game, and quit
       await game.keyboard.press(process.platform === "darwin" ? "Meta+r" : "Control+r");
       await expect(game.getByRole("dialog", { name: "Hub", exact: true })).toBeVisible();
       await game.screenshot({ path: resolve(root, ".evidence/f3/fixture-hub.png") });
-      await expect(game.locator("html")).toHaveAttribute("data-ui-style", "obsidian");
-      await game.screenshot({ path: resolve(root, ".evidence/g1/hub-modern.png") });
-      await launcher.getByRole("combobox", { name: /^Panel style/ }).selectOption("classic");
-      await expect(game.locator("html")).toHaveAttribute("data-ui-style", "classic");
-      await launcher.getByRole("combobox", { name: /^Panel style/ }).selectOption("obsidian");
-      await expect(game.locator("html")).toHaveAttribute("data-ui-style", "obsidian");
       await game.getByRole("textbox").fill("10 ecto in p");
       await expect(
         game.getByText("10 Globs of Ectoplasm = 82 platinum", { exact: true }),
@@ -272,8 +265,9 @@ test("shell keeps one launcher, rejects launcher actions from the game, and quit
         const page = relaunched.windows().find((page) => page.url() === "moxi://app/launcher/");
         if (!page) throw new Error("Launcher did not reopen");
         await page.getByRole("button", { name: "Settings", exact: true }).click();
-        await page.getByRole("button", { name: "Appearance", exact: true }).click();
-        await expect(page.getByRole("combobox", { name: /^Panel style/ })).toHaveValue("obsidian");
+        await expect(
+          page.getByRole("switch", { name: "Target Distance", exact: true }),
+        ).not.toBeChecked();
         await page.screenshot({ path: resolve(root, ".evidence/g1/launcher-reopened.png") });
       } finally {
         await relaunched.close();

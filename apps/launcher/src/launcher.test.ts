@@ -1,11 +1,10 @@
 // @vitest-environment happy-dom
 import { afterEach, expect, test } from "vite-plus/test";
 import { createApp, nextTick, type App as VueApp } from "vue";
-import type { Readiness } from "@moxi/contracts";
+import type { Readiness, Tool } from "@moxi/contracts";
 import App from "./App.vue";
-import RangeControl from "./components/RangeControl.vue";
 import { bridgeData } from "./launcher-data";
-import { account, connectMain, disconnectMain, flush } from "./launcher-test-kit";
+import { account, connectMain, disconnectMain, flush, tool } from "./launcher-test-kit";
 
 let application: VueApp | undefined;
 afterEach(() => {
@@ -22,8 +21,9 @@ async function settle() {
 async function mount(
   accounts = [account("main", "Main account"), account("storage", "Storage account")],
   readiness?: Readiness,
+  tools: Tool[] = [],
 ) {
-  const main = connectMain(accounts, readiness);
+  const main = connectMain(accounts, readiness, tools);
   const container = document.createElement("div");
   document.body.append(container);
   application = createApp(App, { data: bridgeData() });
@@ -188,60 +188,30 @@ test("Main can bring the launcher back to the accounts from Settings", async () 
   expect(names()).toHaveLength(2);
 });
 
-test("Appearance saves the style and the font Main will apply to every game window", async () => {
-  const main = await mount();
+test("Tools lists every bundled plugin with its switch, and a switch asks Main to save it", async () => {
+  const main = await mount(undefined, undefined, [
+    tool("moxi.builds", "Builds"),
+    tool("moxi.calculator", "Calculator", false),
+  ]);
   await click("Settings");
-  await click("Appearance");
-  const [style, font] = [...document.querySelectorAll("select")];
-  if (!style || !font) throw new Error("Missing selects");
-  await change(style, "obsidian");
-  await change(font, "inter");
-  expect(main.calls).toContainEqual([
-    "appearance.set",
-    {
-      uiStyle: "obsidian",
-      uiPanelOpacity: 94,
-      uiFont: "guild-wars",
-    },
-  ]);
-  expect(main.calls.filter(([name]) => name === "appearance.set").at(-1)).toEqual([
-    "appearance.set",
-    { uiStyle: "obsidian", uiPanelOpacity: 94, uiFont: "inter" },
-  ]);
-  expect(document.documentElement.dataset.uiStyle).toBe("obsidian");
+  expect(document.querySelector("h1")?.textContent).toBe("Tools");
+  expect(input("Builds").checked).toBe(true);
+  expect(input("Calculator").checked).toBe(false);
+
+  input("Calculator").click();
+  await settle();
+  expect(main.calls).toContainEqual(["tools.set", { id: "moxi.calculator", enabled: true }]);
+  expect(input("Calculator").checked).toBe(true);
 });
 
-test("slider dragging previews the value but commits only on release", async () => {
-  const container = document.createElement("div");
-  document.body.append(container);
-  const saved: number[] = [];
-  application = createApp(RangeControl, {
-    label: "Panel opacity",
-    value: 94,
-    min: 65,
-    max: 100,
-    unit: "%",
-    onChange: (value: number) => saved.push(value),
-  });
-  application.mount(container);
-  const slider = input("Panel opacity");
-  slider.value = "75";
-  slider.dispatchEvent(new Event("input"));
-  await settle();
-  expect(input("Panel opacity value").value).toBe("75");
-  expect(saved).toEqual([]);
-  slider.dispatchEvent(new Event("change"));
-  await settle();
-  expect(saved).toEqual([75]);
-});
-
-test.each(["", "64", "101", "80.5"])("opacity %s is not committed", async (value) => {
-  const main = await mount();
+test("a switch Main refuses goes back to what Main has", async () => {
+  const main = await mount(undefined, undefined, [tool("moxi.builds", "Builds")]);
   await click("Settings");
-  await click("Appearance");
-  await change(input("Panel opacity value"), value);
-  expect(main.names()).not.toContain("appearance.set");
-  expect(input("Panel opacity value").getAttribute("aria-invalid")).toBe("true");
+  main.refuse.add("tools.set");
+  input("Builds").click();
+  await settle();
+  expect(main.names()).toContain("tools.set");
+  expect(input("Builds").checked).toBe(true);
 });
 
 test("Game files pauses and resumes the background download", async () => {
