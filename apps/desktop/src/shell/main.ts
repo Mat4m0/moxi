@@ -1,4 +1,13 @@
-import { app, BrowserWindow, MessageChannelMain, net, protocol, session } from "electron";
+import {
+  app,
+  BrowserWindow,
+  Menu,
+  MessageChannelMain,
+  net,
+  protocol,
+  session,
+  systemPreferences,
+} from "electron";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
@@ -202,6 +211,19 @@ function createWindow(kind: WindowKind) {
     .catch((error: unknown) => console.error("[moxi] Window could not load", error));
   return win;
 }
+// Runs before the first window. AppKit reads the bundle's press-and-hold preference when it
+// creates text clients; with it off, macOS sends native key repeats to the game's text fields
+// (held letters, Backspace, arrows). The menu keeps Edit for Cmd+C/V/X/A and drops Reload.
+function prepareKeyboard() {
+  if (process.platform === "darwin") {
+    systemPreferences.setUserDefault("ApplePressAndHoldEnabled", "boolean", false);
+    Menu.setApplicationMenu(
+      Menu.buildFromTemplate([{ role: "appMenu" }, { role: "editMenu" }, { role: "windowMenu" }]),
+    );
+  } else {
+    Menu.setApplicationMenu(null);
+  }
+}
 function reveal(win: BrowserWindow) {
   if (background) return win.showInactive();
   win.show();
@@ -225,6 +247,7 @@ else {
   void app
     .whenReady()
     .then(() => {
+      prepareKeyboard();
       session.defaultSession.setPermissionRequestHandler((contents, permission, callback) =>
         callback(
           windows.get(contents.id)?.kind === "game" &&

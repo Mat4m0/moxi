@@ -4,6 +4,7 @@ import { createRuntime } from "@moxi/gwkit";
 import { mountGameFilesystem } from "./filesystem";
 import { createSocketHost } from "./socket-host";
 import { createImage } from "./image";
+import { installGameInput, type OskInput } from "./input";
 
 type GameModule = {
   canvas: HTMLCanvasElement;
@@ -20,6 +21,10 @@ type GameModule = {
   image: ReturnType<typeof createImage>;
   socket: ReturnType<typeof createSocketHost>["socket"];
   dns: { resolve(name: string): Promise<string> };
+  oskInput: OskInput;
+  oskIsModal: boolean;
+  oskActiveInput?: unknown;
+  oskIsActive?: boolean;
   getPatchMode(): Promise<string>;
   handleFatalReadError(): void;
   setStartupProgress(stage: unknown): void;
@@ -41,6 +46,7 @@ const canvas = element;
 const message = status;
 let runtime: ReturnType<typeof createRuntime> | undefined;
 let network: ReturnType<typeof createSocketHost> | undefined;
+let input: ReturnType<typeof installGameInput> | undefined;
 let clientToken: string | undefined;
 let sessionEnded = false;
 let frameLog: ReturnType<typeof setInterval> | undefined;
@@ -79,8 +85,15 @@ async function boot() {
   }
   game.onSafePoint(reportHealth);
   network = createSocketHost(window.moxi, reportHealth);
+  input = installGameInput(
+    canvas,
+    () => Module.oskActiveInput,
+    () => Boolean(Module.oskIsActive),
+  );
   globalThis.Module = {
     canvas,
+    oskInput: input.oskInput,
+    oskIsModal: false,
     preRun() {
       mountGameFilesystem(Module, () =>
         fail("Your saved game files could not be restored or saved. Restart Moxi to try again."),
@@ -131,6 +144,7 @@ window.addEventListener(
   () => {
     sessionEnded = true;
     clearInterval(frameLog);
+    input?.dispose();
     network?.dispose();
     runtime?.dispose();
   },
