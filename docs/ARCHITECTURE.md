@@ -99,6 +99,9 @@ other Main code is plain Node, so Vitest runs it without Electron.
   Main validates plugin-host-only document channels, serializes revision-checked
   writes and broadcasts copied values to plugin sessions. Stale writes are refused.
   Plugin documents never use browser storage.
+- Main saves the launcher and game window placement as settings (normal bounds plus full screen
+  or maximized). A first launch opens both maximized; bounds that no display shows any
+  more are brought back into view.
 - Credentials are stored with `safeStorage`. On Linux, saving is refused when
   the backend is `basic_text`.
 

@@ -5,6 +5,7 @@ import {
   MessageChannelMain,
   net,
   protocol,
+  screen,
   session,
   systemPreferences,
 } from "electron";
@@ -29,6 +30,8 @@ import { createPluginDocuments } from "../plugin-documents.ts";
 import { loadPluginBundles } from "../plugin-bundles.ts";
 import { pluginCsp } from "../plugin-isolation.ts";
 import { createAppearanceSettings } from "../storage/appearance.js";
+import { createWindowStateSettings } from "../storage/window-state.js";
+import { captureWindow, planWindow, type SavedWindowKind } from "../window-state.js";
 
 const repoRoot = resolve(import.meta.dirname, "../../..");
 const identity = resolveIdentity(app.isPackaged);
@@ -78,6 +81,7 @@ const sessions = new Map<
   number,
   { client: ReturnType<typeof createClientRoutes>; token: string }
 >();
+let windowState: ReturnType<typeof createWindowStateSettings> | undefined;
 let launcher: BrowserWindow | undefined;
 let game: BrowserWindow | undefined;
 let pluginHost: BrowserWindow;
@@ -130,14 +134,57 @@ const roots = {
   game: rendererRoot("game"),
   "plugin-host": rendererRoot("plugin-host"),
 };
+// Work areas of every display, the primary first.
+function workAreas() {
+  const primary = screen.getPrimaryDisplay();
+  const others = screen.getAllDisplays().filter((display) => display.id !== primary.id);
+  return [primary, ...others].map((display) => display.workArea);
+}
+// Saves the normal bounds, not the full screen size, so leaving full screen restores the old size.
+function rememberWindowState(win: BrowserWindow, kind: SavedWindowKind) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const save = () => {
+    clearTimeout(timer);
+    if (win.isDestroyed() || !windowState) return;
+    try {
+      windowState.set(
+        kind,
+        captureWindow({
+          normalBounds: win.getNormalBounds(),
+          fullscreen: win.isFullScreen(),
+          maximized: win.isMaximized(),
+        }),
+      );
+    } catch (error) {
+      console.warn("[moxi] Window state was not saved", error);
+    }
+  };
+  const later = () => {
+    clearTimeout(timer);
+    timer = setTimeout(save, 500);
+  };
+  win.on("resize", later);
+  win.on("move", later);
+  win.on("enter-full-screen", save);
+  win.on("leave-full-screen", save);
+  win.on("maximize", save);
+  win.on("unmaximize", save);
+  win.on("close", save);
+  win.on("closed", () => clearTimeout(timer));
+}
 function createWindow(kind: WindowKind) {
   if (kind === "game") client = createClientRoutes(folders.gameCache, patchFetch, cacheClient);
+  // Agents and tests run without remembered placement or full screen.
+  const remembered = kind !== "pluginHost" && !background ? kind : undefined;
+  const plan = remembered
+    ? planWindow(remembered, windowState?.get(remembered) ?? null, workAreas())
+    : undefined;
   const win = new BrowserWindow({
-    width: 960,
-    height: 640,
+    ...(plan?.bounds ?? { width: 960, height: 640 }),
     minWidth: 640,
     minHeight: 480,
-    show: kind !== "pluginHost" && !background,
+    // Hidden until `reveal`, so a maximized window opens at full size instead of growing.
+    show: false,
     title: identity.productName,
     webPreferences: {
       ...(kind === "pluginHost" ? { partition: "persist:plugins" } : {}),
@@ -151,6 +198,11 @@ function createWindow(kind: WindowKind) {
       webSecurity: true,
     },
   });
+  if (remembered && plan) {
+    if (plan.maximized) win.maximize();
+    if (plan.fullscreen) win.setFullScreen(true);
+    rememberWindowState(win, remembered);
+  }
   if (kind === "game") {
     const loaded = new Promise<void>((done) =>
       win.webContents.once("did-finish-load", () => done()),
@@ -348,6 +400,7 @@ else {
       });
       app.once("will-quit", () => database.close());
       const appearance = createAppearanceSettings(database);
+      windowState = createWindowStateSettings(database);
       const windowKind = (id: number) => windows.get(id)?.kind;
       const pluginDocuments = createPluginDocuments(database);
       handle("plugin.doc.read", (ref) => pluginDocuments.read(ref), windowKind);

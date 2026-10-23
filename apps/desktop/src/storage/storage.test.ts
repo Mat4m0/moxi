@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { createAppearanceSettings } from "./appearance";
+import { createWindowStateSettings } from "./window-state";
 import {
   openDatabase,
   migrations,
@@ -269,4 +270,22 @@ test("appearance saved through Main settings survives reopening the database", (
     uiPanelOpacity: 80,
     uiFont: "inter",
   });
+});
+
+test("window state saved through Main settings survives reopening, and a bad row reads as nothing saved", () => {
+  const fixture = setup();
+  const db = fixture.open();
+  const state = { x: 10, y: 20, width: 1000, height: 700, fullscreen: true, maximized: false };
+  createWindowStateSettings(db).set("game", state);
+  db.close();
+  const reopened = fixture.open();
+  const log = vi.fn();
+  const settings = createWindowStateSettings(reopened, log);
+  expect(settings.get("game")).toEqual(state);
+  expect(settings.get("launcher")).toBeNull();
+  reopened
+    .prepare("UPDATE settings SET json = ? WHERE key = 'gameWindow'")
+    .run('{"x":"left","width":-5}');
+  expect(settings.get("game")).toBeNull();
+  expect(log).toHaveBeenCalledTimes(1);
 });
